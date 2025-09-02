@@ -1,0 +1,88 @@
+{
+  // TypeScript compiler options for strict type checking and modern JavaScript features
+  "compilerOptions": {
+    // Target modern JavaScript for better performance and smaller bundles
+    "target": "ES2022",
+
+    // Use modern module system with tree-shaking support
+    "module": "ESNext",
+
+    // Enable JSX support for React components
+    "jsx": "react-jsx",
+
+    // Library support for modern browsers and DOM APIs
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+
+    // Module resolution strategy for modern bundlers
+    "moduleResolution": "bundler",
+
+    // Allow importing TypeScript extensions in development
+    "allowImportingTsExtensions": false,
+
+    // Enable synthetic default imports for better compatibility
+    "allowSyntheticDefaultImports": true,
+
+    // Support for JSON modules
+    "resolveJsonModule": true,
+
+    // Treat as module for better ES module support
+    "isolatedModules": true,
+
+    // Disable emitting files (Vite handles this)
+    "noEmit": true,
+
+    // Strict type checking for maximum type safety
+    "strict": true,
+
+    // Additional strict checks for better code quality
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // Skip type checking for library files to improve performance
+    "skipLibCheck": true,
+
+    // Force consistent casing in file names
+    "forceConsistentCasingInFileNames": true,
+
+    // Path mapping for clean imports and better organization
+    "baseUrl": ".",
+    "paths": {
+      // Core application paths
+      "@/*": ["src/*"],
+      "@/components/*": ["src/components/*"],
+      "@/hooks/*": ["src/hooks/*"],
+      "@/utils/*": ["src/utils/*"],
+      "@/types/*": ["src/types/*"],
+      "@/context/*": ["src/context/*"],
+      "@/services/*": ["src/services/*"],
+      "@/constants/*": ["src/constants/*"],
+      "@/stores/*": ["src/stores/*"],
+      "@/lib/*": ["src/lib/*"],
+      "@/assets/*": ["src/assets/*"],
+      "@/test/*": ["src/test/*"]
+    }
+  },
+
+  // Files to include in TypeScript compilation
+  "include": [
+    "src/**/*",
+    "vite.config.ts"
+  ],
+
+  // Files to exclude from TypeScript compilation
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ],
+
+  // TypeScript project references for better monorepo support
+  "references": [
+    { "path": "./tsconfig.node.json" }
+  ]
+}

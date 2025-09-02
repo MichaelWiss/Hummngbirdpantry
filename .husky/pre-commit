@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# Husky pre-commit hook for code quality automation
+
+# Exit on error
+set -e
+
+# Run lint-staged to check only staged files
+npx lint-staged
+
+# Run TypeScript type checking
+npm run type-check
+
+# Run tests (optional - can be slow, consider running on CI only)
+# npm run test:run
+
+echo "✅ Pre-commit checks passed!"

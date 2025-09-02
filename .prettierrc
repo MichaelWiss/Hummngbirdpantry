@@ -1,0 +1,67 @@
+{
+  // Code formatting configuration for consistent style across the project
+  "semi": true,
+  "trailingComma": "es5",
+  "singleQuote": true,
+  "printWidth": 80,
+  "tabWidth": 2,
+  "useTabs": false,
+
+  // Language-specific overrides
+  "overrides": [
+    {
+      // TypeScript and TypeScript React files
+      "files": ["*.ts", "*.tsx"],
+      "options": {
+        "parser": "typescript",
+        "semi": true,
+        "singleQuote": true,
+        "trailingComma": "es5",
+        "printWidth": 80,
+        "tabWidth": 2,
+        "bracketSpacing": true,
+        "arrowParens": "avoid"
+      }
+    },
+    {
+      // JavaScript files
+      "files": ["*.js", "*.jsx"],
+      "options": {
+        "parser": "babel",
+        "semi": true,
+        "singleQuote": true,
+        "trailingComma": "es5",
+        "printWidth": 80,
+        "tabWidth": 2
+      }
+    },
+    {
+      // JSON files
+      "files": ["*.json"],
+      "options": {
+        "parser": "json",
+        "printWidth": 200,
+        "tabWidth": 2
+      }
+    },
+    {
+      // Markdown files
+      "files": ["*.md"],
+      "options": {
+        "parser": "markdown",
+        "printWidth": 80,
+        "tabWidth": 2,
+        "proseWrap": "preserve"
+      }
+    },
+    {
+      // CSS and configuration files
+      "files": ["*.css", "*.scss", "*.html"],
+      "options": {
+        "parser": "css",
+        "printWidth": 120,
+        "tabWidth": 2
+      }
+    }
+  ]
+}

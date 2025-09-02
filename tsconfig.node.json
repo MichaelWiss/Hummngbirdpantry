@@ -1,0 +1,49 @@
+{
+  // TypeScript configuration specifically for Node.js build tools
+  // This handles Vite config, PostCSS config, and other Node.js tooling
+  "compilerOptions": {
+    // Target Node.js environment for build tools
+    "target": "ES2022",
+
+    // Use Node.js module resolution
+    "module": "ESNext",
+
+    // Module resolution for Node.js
+    "moduleResolution": "node",
+
+    // Allow synthetic default imports
+    "allowSyntheticDefaultImports": true,
+
+    // Support for JSON modules in Node.js
+    "resolveJsonModule": true,
+
+    // Composite project for better incremental builds
+    "composite": true,
+
+    // Skip library checks for faster compilation
+    "skipLibCheck": true,
+
+    // Isolated modules for better compatibility
+    "isolatedModules": true,
+
+    // No emit since this is for type checking only
+    "noEmit": true,
+
+    // Strict mode for build tool type safety
+    "strict": true,
+
+    // Force consistent file name casing
+    "forceConsistentCasingInFileNames": true,
+
+    // Type definitions for Node.js environment
+    "types": ["node"]
+  },
+
+  // Include only Node.js build tool files
+  "include": [
+    "vite.config.ts",
+    "tailwind.config.js",
+    "postcss.config.js",
+    ".eslintrc.js"
+  ]
+}
