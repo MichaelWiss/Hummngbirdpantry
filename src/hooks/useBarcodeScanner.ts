@@ -28,7 +28,7 @@ export const useBarcodeScanner = () => {
     lookupResult: null
   })
 
-  // Handle successful barcode detection
+  // Handle successful barcode detection with enhanced caching
   const onBarcodeDetected = useCallback(async (barcode: Barcode) => {
     console.log('🔍 Barcode detected:', barcode)
 
@@ -47,28 +47,33 @@ export const useBarcodeScanner = () => {
         throw new Error('Invalid barcode format detected')
       }
 
-      // Lookup product information
-      const productData = await BarcodeService.lookupProduct(barcode)
+      // Use detailed lookup with source information
+      const lookupResult = await BarcodeService.lookupProductDetailed(barcode)
 
-      if (productData) {
-        // Product found - store result
+      if (lookupResult.found && lookupResult.data) {
+        // Product found - store result with source info
         setState(prev => ({
           ...prev,
           isLookingUp: false,
           lookupResult: {
             found: true,
-            productData
+            productData: lookupResult.data
           }
         }))
 
-        console.log('✅ Product found:', productData.name)
+        const sourceIcon = lookupResult.cached ? '⚡' : lookupResult.source === 'api' ? '🌐' : '📦'
+        console.log(`${sourceIcon} Product found (${lookupResult.source}):`, lookupResult.data.name)
+
         return {
           barcode,
-          productData,
-          found: true
+          productData: lookupResult.data,
+          found: true,
+          source: lookupResult.source,
+          cached: lookupResult.cached,
+          lookupTime: performance.now()
         }
       } else {
-        // Product not found - still store the barcode
+        // Product not found - still store the barcode for manual entry
         setState(prev => ({
           ...prev,
           isLookingUp: false,
@@ -82,7 +87,10 @@ export const useBarcodeScanner = () => {
         return {
           barcode,
           productData: null,
-          found: false
+          found: false,
+          source: 'none',
+          cached: false,
+          lookupTime: performance.now()
         }
       }
     } catch (error) {

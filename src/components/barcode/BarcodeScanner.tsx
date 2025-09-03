@@ -22,37 +22,200 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
   const [isInitializing, setIsInitializing] = useState(false)
   const [codeReader] = useState(() => new BrowserMultiFormatReader())
+  const [permissionInstructions, setPermissionInstructions] = useState('')
 
-  // Request camera permission
-  const requestCameraPermission = async () => {
+  // Check current camera permission status
+  const checkCameraPermission = async () => {
     try {
-      setIsInitializing(true)
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment', // Use back camera on mobile
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      })
-      setHasPermission(true)
-      setIsInitializing(false)
-      return stream
+      if (!navigator.permissions) return null
+
+      const result = await navigator.permissions.query({ name: 'camera' as PermissionName })
+      return result.state
     } catch (error) {
-      console.error('Camera permission denied:', error)
-      setHasPermission(false)
-      setIsInitializing(false)
-      onError('Camera permission is required for barcode scanning')
+      console.warn('Permission API not supported:', error)
       return null
     }
   }
 
-  // Start scanning
+  // Initialize permission check on mount
+  useEffect(() => {
+    checkCameraPermission().then(state => {
+      if (state === 'denied') {
+        setHasPermission(false)
+        setPermissionInstructions(getBrowserInstructions())
+      } else if (state === 'granted') {
+        setHasPermission(true)
+      } else if (state === 'prompt') {
+        setHasPermission(null)
+      }
+    })
+  }, [])
+
+  // Enhanced camera permission handling with detailed error feedback
+  const requestCameraPermission = async () => {
+    try {
+      setIsInitializing(true)
+
+      // Check HTTPS requirement (warn but don't block for localhost/mobile testing)
+      const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+      if (!isSecure) {
+        console.warn('⚠️ Camera access works best with HTTPS. For production, ensure HTTPS is enabled.')
+      }
+
+      // Check camera API availability with better error handling
+      if (!navigator.mediaDevices) {
+        console.error('🔴 navigator.mediaDevices is undefined')
+        console.log('User Agent:', navigator.userAgent)
+        console.log('Location:', window.location.href)
+        console.log('Protocol:', window.location.protocol)
+        throw new Error('MEDIA_DEVICES_NOT_SUPPORTED')
+      }
+
+      if (!navigator.mediaDevices.getUserMedia) {
+        console.error('🔴 getUserMedia is not available')
+        console.log('Available methods:', Object.getOwnPropertyNames(navigator.mediaDevices))
+        throw new Error('GET_USER_MEDIA_NOT_SUPPORTED')
+      }
+
+      // Try to enumerate devices (may not be available on all browsers)
+      let cameras = []
+      if (navigator.mediaDevices.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices()
+          cameras = devices.filter(device => device.kind === 'videoinput')
+        } catch (enumerateError) {
+          console.warn('⚠️ Could not enumerate devices:', enumerateError)
+          // Continue without enumeration - camera might still work
+        }
+      }
+
+      // If we couldn't enumerate but getUserMedia is available, assume camera exists
+      if (cameras.length === 0 && navigator.mediaDevices.enumerateDevices) {
+        throw new Error('NO_CAMERA')
+      }
+
+      // Request camera permission with optimized constraints
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 },
+          frameRate: { ideal: 30, min: 15 },
+          ...(isMobile && {
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 }
+          })
+        }
+      })
+
+      setHasPermission(true)
+      setIsInitializing(false)
+      return stream
+
+    } catch (error: any) {
+      console.error('Camera permission error:', error)
+      setIsInitializing(false)
+
+      // Handle specific error types with detailed user guidance
+      if (error.name === 'NotAllowedError') {
+        setHasPermission(false)
+        const browserInstructions = getBrowserInstructions()
+        onError(`Camera access denied. ${browserInstructions}`)
+      } else if (error.message === 'MEDIA_DEVICES_NOT_SUPPORTED') {
+        const isFirefox = navigator.userAgent.toLowerCase().includes('firefox')
+        if (isFirefox) {
+          setHasPermission(null)
+          onError('Firefox MediaDevices API issue detected. Try: 1) Refresh the page, 2) Check about:config -> media.navigator.permission.disabled, 3) Try in a new private window.')
+        } else {
+          setHasPermission(null)
+          onError('Camera API not supported on this browser. Please update to a modern browser (Chrome 47+, Firefox 43+, Safari 11+, Edge 79+).')
+        }
+      } else if (error.message === 'GET_USER_MEDIA_NOT_SUPPORTED') {
+        const isSafari = navigator.userAgent.toLowerCase().includes('safari') && !navigator.userAgent.toLowerCase().includes('chrome')
+        const isFirefox = navigator.userAgent.toLowerCase().includes('firefox')
+
+        if (isSafari) {
+          setHasPermission(null)
+          onError('Safari camera issue detected. Try: 1) Refresh page, 2) Check Safari > Settings > Privacy > Camera, 3) Try in new tab, 4) Run testSafariCamera() in console.')
+        } else if (isFirefox) {
+          setHasPermission(null)
+          onError('Firefox getUserMedia issue. This might be due to: 1) Insecure context, 2) Permission settings, 3) Firefox configuration. Try the Firefox test in console.')
+        } else {
+          setHasPermission(null)
+          onError('getUserMedia API not supported on this browser. Please update to a modern browser that supports camera access.')
+        }
+      } else if (error.name === 'NotFoundError') {
+        setHasPermission(null)
+        onError('No camera found on this device. Please ensure your device has a working camera.')
+      } else if (error.name === 'NotSupportedError') {
+        setHasPermission(null)
+        onError('Camera not supported on this browser. Please try a different browser or update your current one.')
+      } else if (error.name === 'NotReadableError') {
+        setHasPermission(null)
+        onError('Camera is being used by another application. Please close other apps using the camera and try again.')
+      } else if (error.name === 'OverconstrainedError') {
+        setHasPermission(false)
+        onError('Camera constraints not supported. Trying with basic settings...')
+        // Fallback to basic constraints
+        return requestBasicCameraPermission()
+      } else {
+        setHasPermission(false)
+        onError(`Camera error: ${error.message || 'Unknown error occurred'}`)
+      }
+
+      return null
+    }
+  }
+
+  // Fallback camera permission with basic constraints
+  const requestBasicCameraPermission = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' } // Fallback to front camera
+      })
+      setHasPermission(true)
+      return stream
+    } catch (fallbackError) {
+      console.error('Fallback camera permission failed:', fallbackError)
+      setHasPermission(false)
+      onError('Unable to access camera with any settings. Please check your device and browser settings.')
+      return null
+    }
+  }
+
+  // Get browser-specific permission instructions
+  const getBrowserInstructions = () => {
+    const userAgent = navigator.userAgent.toLowerCase()
+
+    if (userAgent.includes('chrome') && !userAgent.includes('edg')) {
+      return 'Click the camera icon in the address bar and select "Allow".'
+    } else if (userAgent.includes('firefox')) {
+      return 'Click the camera icon (🔒) in the address bar and select "Allow" or "Allow and Remember". Try refreshing the page after allowing.'
+    } else if (userAgent.includes('safari') && userAgent.includes('mobile')) {
+      return 'Go to Settings > Safari > Camera and enable access for this website.'
+    } else if (userAgent.includes('safari')) {
+      return 'Go to Safari > Preferences > Websites > Camera and allow access.'
+    } else if (userAgent.includes('edg')) {
+      return 'Click the lock icon in the address bar and select "Allow" for Camera.'
+    } else {
+      return 'Check your browser settings to enable camera access.'
+    }
+  }
+
+  // Start scanning with comprehensive checks
   const startScanning = async () => {
     if (!videoRef.current) return
 
     try {
       setIsScanning(true)
       setIsInitializing(true)
+
+      // Optional HTTPS warning for user feedback
+      const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+      if (!isSecure) {
+        console.warn('⚠️ Camera access works best with HTTPS. Some features may be limited.')
+      }
 
       const stream = await requestCameraPermission()
       if (!stream) {
@@ -172,22 +335,40 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                   <AlertCircle className="w-8 h-8 text-red-600" />
                 </div>
                 <h4 className="text-xl font-semibold text-neutral-900 mb-2">
-                  Camera Access Needed
+                  Camera Access Required
                 </h4>
-                <p className="text-neutral-600 mb-6 max-w-xs">
-                  Please allow camera access to scan barcodes. This helps us identify products quickly.
+                <p className="text-neutral-600 mb-4 max-w-xs">
+                  Camera access is needed to scan barcodes. Please follow these steps:
                 </p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 max-w-xs">
+                  <p className="text-blue-800 text-sm font-medium">
+                    {permissionInstructions || getBrowserInstructions()}
+                  </p>
+                </div>
                 <div className="space-y-3">
                   <button
                     onClick={requestCameraPermission}
                     className="w-full bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
                   >
                     <Camera size={18} />
-                    <span>Grant Permission</span>
+                    <span>Try Again</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Refresh permission status
+                      checkCameraPermission().then(state => {
+                        if (state === 'granted') {
+                          setHasPermission(true)
+                        }
+                      })
+                    }}
+                    className="w-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 px-4 py-3 rounded-lg font-medium transition-colors"
+                  >
+                    Check Permission Status
                   </button>
                   <button
                     onClick={onClose}
-                    className="w-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 px-6 py-3 rounded-lg font-medium transition-colors"
+                    className="w-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 px-4 py-3 rounded-lg font-medium transition-colors"
                   >
                     Cancel
                   </button>
@@ -285,6 +466,223 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       </div>
     </div>
   )
+}
+
+// Safari-specific camera test
+const testSafariCamera = async () => {
+  console.log('🧭 Safari Camera Test Starting...')
+
+  try {
+    // Test 1: Check if we're in secure context
+    console.log('Test 1 - Secure Context:', window.isSecureContext)
+
+    // Test 2: Check if we're in an iframe (Safari blocks camera in iframes)
+    console.log('Test 2 - In iFrame:', window !== window.top)
+
+    // Test 3: Check navigator.mediaDevices exists
+    console.log('Test 3 - navigator.mediaDevices exists:', !!navigator.mediaDevices)
+
+    if (navigator.mediaDevices) {
+      // Test 4: Check getUserMedia exists
+      console.log('Test 4 - getUserMedia exists:', !!navigator.mediaDevices.getUserMedia)
+
+      // Test 5: Check enumerateDevices exists
+      console.log('Test 5 - enumerateDevices exists:', !!navigator.mediaDevices.enumerateDevices)
+
+      // Test 6: Check available methods
+      console.log('Test 6 - Available methods:', Object.getOwnPropertyNames(navigator.mediaDevices))
+
+      // Test 7: Try to call getUserMedia (this should trigger permission prompt)
+      console.log('Test 7 - Attempting getUserMedia...')
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user', // Front camera first for Safari
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          }
+        })
+        console.log('✅ getUserMedia SUCCESS!')
+        stream.getTracks().forEach(track => track.stop()) // Clean up
+      } catch (gumError: any) {
+        console.log('❌ getUserMedia FAILED:', gumError.name, gumError.message)
+        console.log('   Common Safari issues:')
+        console.log('   - NotAllowedError: User denied permission')
+        console.log('   - NotFoundError: No camera available')
+        console.log('   - SecurityError: Not in secure context')
+      }
+    }
+  } catch (error) {
+    console.error('🧭 Safari test failed:', error)
+  }
+}
+
+// Firefox-specific camera test
+const testFirefoxCamera = async () => {
+  console.log('🦊 Firefox Camera Test Starting...')
+
+  try {
+    // Test 1: Check if we're in secure context
+    console.log('Test 1 - Secure Context:', window.isSecureContext)
+
+    // Test 2: Check navigator.mediaDevices exists
+    console.log('Test 2 - navigator.mediaDevices exists:', !!navigator.mediaDevices)
+
+    if (navigator.mediaDevices) {
+      // Test 3: Check getUserMedia exists
+      console.log('Test 3 - getUserMedia exists:', !!navigator.mediaDevices.getUserMedia)
+
+      // Test 4: Check enumerateDevices exists
+      console.log('Test 4 - enumerateDevices exists:', !!navigator.mediaDevices.enumerateDevices)
+
+      // Test 5: Try to call getUserMedia (this should trigger permission prompt)
+      console.log('Test 5 - Attempting getUserMedia...')
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+        console.log('✅ getUserMedia SUCCESS!')
+        stream.getTracks().forEach(track => track.stop()) // Clean up
+      } catch (gumError: any) {
+        console.log('❌ getUserMedia FAILED:', gumError.name, gumError.message)
+      }
+    }
+  } catch (error) {
+    console.error('🦊 Firefox test failed:', error)
+  }
+}
+
+// Safari-specific camera test (available in console as testSafariCamera())
+if (typeof window !== 'undefined') {
+  (window as any).testSafariCamera = testSafariCamera
+}
+
+// Firefox-specific camera test (available in console as testFirefoxCamera())
+if (typeof window !== 'undefined') {
+  (window as any).testFirefoxCamera = testFirefoxCamera
+}
+
+// Diagnostic utility for camera troubleshooting (can be called from browser console)
+if (typeof window !== 'undefined') {
+  (window as any).diagnoseCamera = async () => {
+    console.log('🔍 Camera Diagnostic Report')
+    console.log('==========================')
+
+    // Check HTTPS (recommended but not required)
+    const isHTTPS = location.protocol === 'https:'
+    const isLocalhost = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
+    console.log(`🔒 HTTPS/Localhost: ${isHTTPS || isLocalhost ? '✅ Recommended' : '⚠️ HTTP (may have limitations)'} (${location.protocol}//${location.hostname})`)
+
+    // Check camera API availability
+    const hasMediaDevices = !!navigator.mediaDevices
+    const hasGetUserMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+    const hasEnumerateDevices = !!(navigator.mediaDevices && navigator.mediaDevices.enumerateDevices)
+
+    console.log(`📷 MediaDevices API: ${hasMediaDevices ? '✅' : '❌'}`)
+    console.log(`📷 getUserMedia: ${hasGetUserMedia ? '✅' : '❌'}`)
+    console.log(`📷 enumerateDevices: ${hasEnumerateDevices ? '✅' : '❌'}`)
+
+    // Check camera availability
+    if (hasEnumerateDevices) {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        const cameras = devices.filter(d => d.kind === 'videoinput')
+        console.log(`📷 Cameras found: ${cameras.length}`)
+        cameras.forEach((camera, i) => {
+          console.log(`  ${i + 1}. ${camera.label || 'Unnamed camera'} (${camera.deviceId.slice(0, 8)}...)`)
+        })
+      } catch (error) {
+        console.log(`📷 Camera enumeration failed: ${error}`)
+      }
+    } else {
+      console.log(`📷 Camera enumeration: Not supported`)
+    }
+
+    // Check permission status
+    try {
+      if (navigator.permissions) {
+        const permission = await navigator.permissions.query({ name: 'camera' as PermissionName })
+        console.log(`🔐 Permission status: ${permission.state}`)
+      } else {
+        console.log(`🔐 Permissions API not available`)
+      }
+    } catch (error) {
+      console.log(`🔐 Permission check failed: ${error}`)
+      if (isFirefox) {
+        console.log(`🦊 Firefox permission check failed - this is common`)
+        console.log(`   Try: about:config -> media.navigator.permission.disabled -> false`)
+      }
+    }
+
+    // Check user agent
+    const userAgent = navigator.userAgent.toLowerCase()
+    let browser = 'Unknown'
+    if (userAgent.includes('chrome') && !userAgent.includes('edg')) browser = 'Chrome'
+    else if (userAgent.includes('firefox')) browser = 'Firefox'
+    else if (userAgent.includes('safari') && !userAgent.includes('chrome')) {
+      browser = 'Safari'
+      const safariVersion = userAgent.match(/version\/(\d+)/i)?.[1] || 'unknown'
+      console.log(`🧭 Safari detected - version check:`)
+      console.log(`   Version: ${safariVersion}`)
+      console.log(`   MediaDevices API should be fully supported in Safari ${safariVersion}`)
+    }
+    else if (userAgent.includes('edg')) browser = 'Edge'
+    console.log(`🌐 Browser: ${browser}`)
+
+    // Check mobile
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    console.log(`📱 Mobile device: ${isMobile ? '✅' : '❌'}`)
+
+    // Safari-specific checks
+    const isSafari = userAgent.includes('safari') && !userAgent.includes('chrome')
+    if (isSafari) {
+      console.log(`🧭 Safari detected - version check:`)
+      const safariVersion = userAgent.match(/version\/(\d+)/i)?.[1] || 'unknown'
+      console.log(`   Version: ${safariVersion}`)
+      console.log(`   MediaDevices API should be fully supported in Safari ${safariVersion}`)
+
+      // Safari has stricter requirements
+      const isSecureContext = window.isSecureContext
+      console.log(`   Secure Context: ${isSecureContext ? '✅' : '❌'}`)
+      console.log(`   User Gesture Required: Safari requires user gesture for camera access`)
+
+      if (!isSecureContext) {
+        console.log(`   ⚠️ Safari requires secure context for camera access`)
+      }
+
+      // Check if we're in an iframe (Safari blocks camera in iframes)
+      const isInIframe = window !== window.top
+      console.log(`   In iFrame: ${isInIframe ? '❌ (camera blocked)' : '✅'}`)
+
+      if (isInIframe) {
+        console.log(`   ⚠️ Safari blocks camera access in iframes`)
+      }
+    }
+
+    // Firefox-specific checks
+    const isFirefox = userAgent.includes('firefox')
+    if (isFirefox) {
+      console.log(`🦊 Firefox detected - version check:`)
+      const firefoxVersion = userAgent.match(/firefox\/(\d+)/i)?.[1] || 'unknown'
+      console.log(`   Version: ${firefoxVersion}`)
+      console.log(`   MediaDevices API should be fully supported in Firefox ${firefoxVersion}`)
+
+      // Check if we're in a secure context
+      const isSecureContext = window.isSecureContext
+      console.log(`   Secure Context: ${isSecureContext ? '✅' : '❌'}`)
+
+      if (!isSecureContext) {
+        console.log(`   ⚠️ Firefox requires secure context for camera access`)
+      }
+    }
+
+    console.log('\n💡 Troubleshooting tips:')
+    console.log('  - Check browser camera settings')
+    console.log('  - Try refreshing the page')
+    console.log('  - Close other apps using the camera')
+    console.log('  - For production: Use HTTPS for best compatibility')
+    if (!isHTTPS && !isLocalhost) {
+      console.log('  - Note: HTTP may work but has limitations on some devices')
+    }
+  }
 }
 
 export default BarcodeScanner

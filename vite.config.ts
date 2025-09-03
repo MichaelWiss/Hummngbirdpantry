@@ -43,22 +43,28 @@ export default defineConfig(({ mode }) => ({
     }
   },
 
-  // Development server configuration optimized for mobile development
+  // Development server configuration optimized for mobile development and camera access
   server: {
     // Port for development server
-    port: 3000,
+    port: 3002,
 
     // Automatically open browser (disabled for mobile development)
     open: false,
 
-    // Host configuration for mobile testing
-    host: true,
+    // Host configuration for mobile testing - bind to all interfaces
+    host: '0.0.0.0',
 
-    // HTTPS for camera and microphone APIs (required for production)
+    // HTTPS for camera and microphone APIs (optional for development)
     https: mode === 'production',
 
     // CORS configuration for external API development
     cors: true,
+
+    // Additional headers for development
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+      'Cross-Origin-Embedder-Policy': 'unsafe-none'
+    },
 
     // Proxy configuration for API development (if needed)
     proxy: {

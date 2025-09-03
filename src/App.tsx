@@ -2,21 +2,46 @@
 // This component serves as the root of our React application
 
 import React from 'react'
-import { Package, ShoppingCart, BarChart3, Scan, Plus } from 'lucide-react'
+import { Package, ShoppingCart, BarChart3, Scan, Plus, Database } from 'lucide-react'
 
 // Import pantry components
 import PantryView from '@/components/pantry/PantryView'
 import BarcodeScanner from '@/components/barcode/BarcodeScanner'
 import AddItemModal from '@/components/pantry/AddItemModal'
+import CacheDemoPage from '@/components/cache/CacheDemoPage'
 
 // Main App component - Simple One-Column Mobile Layout
 const App: React.FC = () => {
   const [showBarcodeScanner, setShowBarcodeScanner] = React.useState(false)
   const [showAddItemModal, setShowAddItemModal] = React.useState(false)
+  const [currentView, setCurrentView] = React.useState<'pantry' | 'demo'>('pantry')
 
-  // Modal trigger functions
-  const openBarcodeScanner = () => setShowBarcodeScanner(true)
-  const openAddItemModal = () => setShowAddItemModal(true)
+  // Initialize barcode cache on app startup
+  React.useEffect(() => {
+    const initializeCache = async () => {
+      try {
+        // Import cache services dynamically to avoid circular dependencies
+        const { BarcodeService } = await import('@/services/barcode.service')
+        const { initializeBackgroundSync } = await import('@/services/backgroundSync.service')
+
+        // Initialize cache system
+        await BarcodeService.initializeCache()
+        console.log('🚀 App initialized with barcode cache support')
+
+        // Initialize background sync
+        await initializeBackgroundSync()
+        console.log('🔄 Background sync service started')
+
+      } catch (error) {
+        console.error('❌ Failed to initialize cache system:', error)
+        // Continue app initialization even if cache fails
+      }
+    }
+
+    initializeCache()
+  }, [])
+
+  // Modal trigger functions (inline in navigation)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-100 to-neutral-200">
@@ -34,7 +59,11 @@ const App: React.FC = () => {
 
       {/* One-Column Layout - Full Width on Mobile, Contained on Desktop */}
       <main className="w-full px-0 sm:px-4 sm:max-w-7xl sm:mx-auto lg:px-8 py-8">
-        <PantryView />
+        {currentView === 'pantry' ? (
+          <PantryView />
+        ) : (
+          <CacheDemoPage />
+        )}
       </main>
 
       {/* Modals */}
@@ -64,9 +93,18 @@ const App: React.FC = () => {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 shadow-lg z-40">
         <div className="grid grid-cols-5 gap-0">
           {/* Pantry - Active State */}
-          <button className="flex flex-col items-center justify-center py-3 px-2 bg-primary-50 border-t-2 border-primary-500">
-            <Package size={20} className="text-primary-600 mb-1" />
-            <span className="text-xs font-medium text-primary-700">Pantry</span>
+          <button
+            onClick={() => setCurrentView('pantry')}
+            className={`flex flex-col items-center justify-center py-3 px-2 transition-colors ${
+              currentView === 'pantry'
+                ? 'bg-primary-50 border-t-2 border-primary-500'
+                : 'hover:bg-neutral-50'
+            }`}
+          >
+            <Package size={20} className={currentView === 'pantry' ? 'text-primary-600 mb-1' : 'text-neutral-600 mb-1'} />
+            <span className={`text-xs font-medium ${currentView === 'pantry' ? 'text-primary-700' : 'text-neutral-700'}`}>
+              Pantry
+            </span>
           </button>
 
           {/* Scan Barcode */}
@@ -93,10 +131,19 @@ const App: React.FC = () => {
             <span className="text-xs font-medium text-neutral-700">Shop</span>
           </button>
 
-          {/* Analytics */}
-          <button className="flex flex-col items-center justify-center py-3 px-2 hover:bg-neutral-50 transition-colors">
-            <BarChart3 size={20} className="text-neutral-600 mb-1" />
-            <span className="text-xs font-medium text-neutral-700">Stats</span>
+          {/* Cache Demo */}
+          <button
+            onClick={() => setCurrentView('demo')}
+            className={`flex flex-col items-center justify-center py-3 px-2 transition-colors ${
+              currentView === 'demo'
+                ? 'bg-blue-50 border-t-2 border-blue-500'
+                : 'hover:bg-neutral-50'
+            }`}
+          >
+            <Database size={20} className={currentView === 'demo' ? 'text-blue-600 mb-1' : 'text-neutral-600 mb-1'} />
+            <span className={`text-xs font-medium ${currentView === 'demo' ? 'text-blue-700' : 'text-neutral-700'}`}>
+              Demo
+            </span>
           </button>
         </div>
       </nav>
@@ -104,7 +151,14 @@ const App: React.FC = () => {
       {/* Desktop Navigation - Clean Horizontal Bar */}
       <nav className="hidden md:flex fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-sm border border-neutral-200 rounded-full shadow-lg px-6 py-3 z-40">
         <div className="flex space-x-8">
-          <button className="flex flex-col items-center space-y-1 px-4 py-2 rounded-lg bg-primary-50 text-primary-700">
+          <button
+            onClick={() => setCurrentView('pantry')}
+            className={`flex flex-col items-center space-y-1 px-4 py-2 rounded-lg transition-colors ${
+              currentView === 'pantry'
+                ? 'bg-primary-50 text-primary-700'
+                : 'hover:bg-neutral-50 text-neutral-600'
+            }`}
+          >
             <Package size={20} />
             <span className="text-xs font-medium">Pantry</span>
           </button>
@@ -123,6 +177,18 @@ const App: React.FC = () => {
           >
             <Plus size={20} />
             <span className="text-xs font-medium">Add</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentView('demo')}
+            className={`flex flex-col items-center space-y-1 px-4 py-2 rounded-lg transition-colors ${
+              currentView === 'demo'
+                ? 'bg-blue-50 text-blue-700'
+                : 'hover:bg-neutral-50 text-neutral-600'
+            }`}
+          >
+            <Database size={20} />
+            <span className="text-xs font-medium">Demo</span>
           </button>
 
           <button className="flex flex-col items-center space-y-1 px-4 py-2 rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600">

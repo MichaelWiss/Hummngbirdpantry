@@ -223,6 +223,48 @@ export interface VoiceState {
 }
 
 // ============================================================================
+// BARCODE CACHE TYPES
+// ============================================================================
+
+// Cache entry structure for offline storage
+export interface BarcodeCacheEntry {
+  barcode: Barcode
+  productData: Partial<PantryItem>
+  timestamp: Date
+  lastAccessed: Date
+  accessCount: number
+  source: 'api' | 'manual' | 'mock'
+  ttl?: Date // Time to live for cache expiration
+}
+
+// Cache metadata and statistics
+export interface BarcodeCacheStats {
+  totalEntries: number
+  lastSync: Date | null
+  cacheSize: number // Approximate size in bytes
+  hitRate: number // Cache hit percentage
+  avgLookupTime: number // Average lookup time in ms
+}
+
+// Cache configuration
+export interface BarcodeCacheConfig {
+  maxSize: number // Maximum cache entries
+  ttl: number // Default TTL in milliseconds
+  syncInterval: number // Background sync interval in ms
+  enableBackgroundSync: boolean
+  enableCompression: boolean
+}
+
+// Cache operation results
+export interface CacheLookupResult {
+  found: boolean
+  data: Partial<PantryItem> | null
+  source: 'cache' | 'api' | 'mock' | 'none'
+  timestamp: Date
+  cached: boolean
+}
+
+// ============================================================================
 // CAMERA AND BARCODE TYPES
 // ============================================================================
 
