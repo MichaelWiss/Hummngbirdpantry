@@ -13,70 +13,86 @@ export default {
 
   // Custom theme configuration for consistent design system
   theme: {
-    // Custom color palette optimized for pantry/food app
+    // Natural food-inspired color palette from UI Styleguide
     colors: {
-      // Primary brand colors - warm and inviting
+      // Primary brand colors - natural greens inspired by Mori
       primary: {
-        50: '#fef2f2',   // Light pink
-        100: '#fde3e3',  // Very light pink
-        200: '#fbcdcd',  // Light coral
-        300: '#f7a7a7',  // Coral
-        400: '#f17676',  // Medium coral
-        500: '#e64c4c',  // Hummingbird red (primary)
-        600: '#d32f2f',  // Darker red
-        700: '#b71c1c',  // Dark red
-        800: '#8b0000',  // Very dark red
-        900: '#5c0000'   // Almost black red
+        50: '#f0fdf4',   // Fresh mint green
+        100: '#dcfce7',  // Light sage
+        200: '#bbf7d0',  // Soft green
+        300: '#86efac',  // Garden green
+        400: '#4ade80',  // Vibrant green
+        500: '#22c55e',  // Primary green
+        600: '#16a34a',  // Deep green
+        700: '#15803d',  // Forest green
+        800: '#166534',  // Dark forest
+        900: '#14532d'   // Deep forest
       },
 
-      // Neutral colors for backgrounds and text
+      // Sophisticated neutrals inspired by Super Normal
       neutral: {
-        50: '#fafafa',   // Very light gray
-        100: '#f5f5f5',  // Light gray
-        200: '#e5e5e5',  // Medium light gray
-        300: '#d4d4d4',  // Light medium gray
-        400: '#a3a3a3',  // Medium gray
-        500: '#737373',  // Gray (default text)
-        600: '#525252',  // Dark gray
-        700: '#404040',  // Darker gray
-        800: '#262626',  // Very dark gray
-        900: '#171717'   // Almost black
+        50: '#fafaf9',   // Warm white
+        100: '#f5f5f4',  // Cream
+        200: '#e7e5e4',  // Light taupe
+        300: '#d6d3d1',  // Taupe
+        400: '#a8a29e',  // Warm gray
+        500: '#78716c',  // Medium gray
+        600: '#57534e',  // Dark gray
+        700: '#44403c',  // Darker gray
+        800: '#292524',  // Very dark
+        900: '#1c1917'   // Almost black
       },
 
-      // Semantic colors for status and feedback
+      // Fresh produce color palette
+      produce: {
+        carrot: '#ea580c',       // Carrot orange
+        'carrot-light': '#fed7aa',
+        'carrot-dark': '#9a3412',
+        beet: '#dc2626',         // Beet red
+        'beet-light': '#fecaca',
+        'beet-dark': '#991b1b',
+        blueberry: '#3730a3',    // Blueberry
+        'blueberry-light': '#c7d2fe',
+        'blueberry-dark': '#1e1b4b',
+        spinach: '#166534',      // Spinach green
+        'spinach-light': '#dcfce7',
+        'spinach-dark': '#052e16'
+      },
+
+      // Health & status colors
+      healthy: '#22c55e',        // Healthy green
+      expiring: '#f59e0b',       // Warning orange
+      expired: '#ef4444',        // Danger red
+      fresh: '#06b6d4',          // Fresh cyan
+      organic: '#84cc16',        // Organic lime
+
+      // Legacy semantic colors for compatibility
       success: {
-        50: '#f0fdf4',   // Light green
-        500: '#22c55e',  // Green
-        600: '#16a34a',  // Dark green
-        700: '#15803d'   // Darker green
+        50: '#f0fdf4',
+        500: '#22c55e',
+        600: '#16a34a',
+        700: '#15803d'
       },
 
       warning: {
-        50: '#fffbeb',   // Light yellow
-        500: '#f59e0b',  // Orange/yellow
-        600: '#d97706',  // Dark orange
-        700: '#b45309'   // Darker orange
+        50: '#fffbeb',
+        500: '#f59e0b',
+        600: '#d97706',
+        700: '#b45309'
       },
 
       error: {
-        50: '#fef2f2',   // Light red
-        500: '#ef4444',  // Red
-        600: '#dc2626',  // Dark red
-        700: '#b91c1c'   // Darker red
+        50: '#fef2f2',
+        500: '#ef4444',
+        600: '#dc2626',
+        700: '#b91c1c'
       },
 
       info: {
-        50: '#eff6ff',   // Light blue
-        500: '#3b82f6',  // Blue
-        600: '#2563eb',  // Dark blue
-        700: '#1d4ed8'   // Darker blue
-      },
-
-      // Special colors for food/pantry context
-      food: {
-        fresh: '#22c55e',      // Green for fresh items
-        expiring: '#f59e0b',   // Orange for expiring soon
-        expired: '#ef4444'     // Red for expired items
+        50: '#eff6ff',
+        500: '#3b82f6',
+        600: '#2563eb',
+        700: '#1d4ed8'
       }
     },
 

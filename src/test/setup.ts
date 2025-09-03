@@ -172,11 +172,7 @@ const customRender = (
   options: Omit<RenderOptions, 'wrapper'> = {}
 ) => {
   const Wrapper = ({ children }: { children: React.ReactNode }) => {
-    return (
-      <BrowserRouter>
-        {children}
-      </BrowserRouter>
-    )
+    return React.createElement(BrowserRouter, null, children)
   }
 
   return render(ui, { wrapper: Wrapper, ...options })

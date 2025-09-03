@@ -1,6 +1,19 @@
 /* Global CSS styles for HummingbirdPantry application */
 
 /* ==========================================================================
+   TAILWIND CSS DIRECTIVES
+   ========================================================================== */
+
+/* Import Tailwind's base styles - includes CSS reset and browser normalization */
+@tailwind base;
+
+/* Import Tailwind's component styles - includes pre-built component styles */
+@tailwind components;
+
+/* Import Tailwind's utility classes - includes all utility classes */
+@tailwind utilities;
+
+/* ==========================================================================
    CSS RESET & NORMALIZE
    ========================================================================== */
 
@@ -18,27 +31,65 @@
 }
 
 /* ==========================================================================
-   CSS CUSTOM PROPERTIES (VARIABLES)
+   CSS CUSTOM PROPERTIES (VARIABLES) - NATURAL FOOD-INSPIRED PALETTE
    ========================================================================== */
 
-/* Color system - follows the Tailwind color scheme */
 :root {
-  /* Primary brand colors */
-  --color-primary-50: #fef2f2;
-  --color-primary-100: #fde3e3;
-  --color-primary-500: #e64c4c;
-  --color-primary-600: #d32f2f;
-  --color-primary-700: #b71c1c;
+  /* Primary brand colors - natural greens inspired by Mori */
+  --color-primary-50: #f0fdf4;   /* Fresh mint green */
+  --color-primary-100: #dcfce7;  /* Light sage */
+  --color-primary-200: #bbf7d0;  /* Soft green */
+  --color-primary-300: #86efac;  /* Garden green */
+  --color-primary-400: #4ade80;  /* Vibrant green */
+  --color-primary-500: #22c55e;  /* Primary green */
+  --color-primary-600: #16a34a;  /* Deep green */
+  --color-primary-700: #15803d;  /* Forest green */
+  --color-primary-800: #166534;  /* Dark forest */
+  --color-primary-900: #14532d;  /* Deep forest */
 
-  /* Neutral colors */
-  --color-neutral-50: #fafafa;
-  --color-neutral-100: #f5f5f5;
-  --color-neutral-200: #e5e5e5;
-  --color-neutral-500: #737373;
-  --color-neutral-600: #525252;
-  --color-neutral-700: #404040;
-  --color-neutral-800: #262626;
-  --color-neutral-900: #171717;
+  /* Sophisticated neutrals inspired by Super Normal */
+  --color-neutral-50: #fafaf9;   /* Warm white */
+  --color-neutral-100: #f5f5f4;  /* Cream */
+  --color-neutral-200: #e7e5e4;  /* Light taupe */
+  --color-neutral-300: #d6d3d1;  /* Taupe */
+  --color-neutral-400: #a8a29e;  /* Warm gray */
+  --color-neutral-500: #78716c;  /* Medium gray */
+  --color-neutral-600: #57534e;  /* Dark gray */
+  --color-neutral-700: #44403c;  /* Darker gray */
+  --color-neutral-800: #292524;  /* Very dark */
+  --color-neutral-900: #1c1917;  /* Almost black */
+
+  /* Fresh produce color palette */
+  --color-produce-carrot: #ea580c;       /* Carrot orange */
+  --color-produce-carrot-light: #fed7aa;
+  --color-produce-carrot-dark: #9a3412;
+  --color-produce-beet: #dc2626;         /* Beet red */
+  --color-produce-beet-light: #fecaca;
+  --color-produce-beet-dark: #991b1b;
+  --color-produce-blueberry: #3730a3;   /* Blueberry */
+  --color-produce-blueberry-light: #c7d2fe;
+  --color-produce-blueberry-dark: #1e1b4b;
+  --color-produce-spinach: #166534;     /* Spinach green */
+  --color-produce-spinach-light: #dcfce7;
+  --color-produce-spinach-dark: #052e16;
+
+  /* Health & status colors */
+  --color-healthy: #22c55e;        /* Healthy green */
+  --color-expiring: #f59e0b;       /* Warning orange */
+  --color-expired: #ef4444;        /* Danger red */
+  --color-fresh: #06b6d4;          /* Fresh cyan */
+  --color-organic: #84cc16;        /* Organic lime */
+
+  /* Legacy semantic colors for backward compatibility */
+  --color-success: #22c55e;        /* Healthy green */
+  --color-warning: #f59e0b;       /* Warning orange */
+  --color-error: #ef4444;         /* Danger red */
+  --color-info: #3b82f6;          /* Info blue */
+
+  /* Special colors for food/pantry context */
+  --color-food-fresh: #22c55e;      /* Green for fresh items */
+  --color-food-expiring: #f59e0b;   /* Orange for expiring soon */
+  --color-food-expired: #ef4444;    /* Red for expired items */
 
   /* Semantic colors */
   --color-success: #22c55e;

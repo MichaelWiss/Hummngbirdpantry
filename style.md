@@ -3,6 +3,19 @@
 ## Overview
 This document outlines the coding conventions and best practices for the HummingbirdPantry project. The app is built with React, TypeScript, and modern web APIs, featuring advanced capabilities like voice recognition, barcode scanning, and PWA functionality.
 
+## 🎨 Design System Reference
+
+This code style guide works in conjunction with the **[UI/UX Styleguide](ui-styleguide.md)** which provides:
+- **Visual Design Language** inspired by Mori and Super Normal Greens
+- **Color Palette** with natural food-inspired tones
+- **Typography System** combining clean and organic fonts
+- **Component Patterns** for consistent UI implementation
+- **Interaction Guidelines** for smooth user experiences
+
+**Important**: Always reference the UI Styleguide when implementing new components to ensure design consistency.
+
+---
+
 ## General Principles
 
 ### Code Quality

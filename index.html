@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Viewport configuration for mobile-first responsive design -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- PWA meta tags for iPhone optimization -->
+    <meta name="theme-color" content="#e64c4c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="HummingbirdPantry" />
+
+    <!-- App description and SEO -->
+    <meta name="description" content="Advanced pantry inventory management with AI chat, barcode scanning, and voice recognition" />
+    <meta name="keywords" content="pantry,inventory,shopping,recipes,barcode,voice" />
+
+    <!-- Favicon and app icons -->
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Preload critical resources for better performance -->
+    <link rel="preload" href="/src/assets/styles/index.css" as="style" />
+    <link rel="modulepreload" href="/src/main.tsx" />
+
+    <!-- App title -->
+    <title>HummingbirdPantry - Smart Pantry Management</title>
+  </head>
+  <body>
+    <!-- Main app container -->
+    <div id="root"></div>
+
+    <!-- Load the main React application -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
