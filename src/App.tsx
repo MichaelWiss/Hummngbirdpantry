@@ -41,6 +41,109 @@ const App: React.FC = () => {
     initializeCache()
   }, [])
 
+  // Camera diagnostic function (no console needed)
+  const runCameraDiagnostic = async () => {
+    const results = []
+    const debugInfo = []
+
+    try {
+      // Browser detection
+      const userAgent = navigator.userAgent
+      const isChrome = userAgent.includes('Chrome') && !userAgent.includes('Edg')
+      const isSafari = userAgent.includes('Safari') && !userAgent.includes('Chrome')
+      const isFirefox = userAgent.includes('Firefox')
+
+      results.push(`🌐 Browser: ${isChrome ? 'Chrome' : isSafari ? 'Safari' : isFirefox ? 'Firefox' : 'Unknown'}`)
+      results.push(`📱 User Agent: ${userAgent.substring(0, 50)}...`)
+
+      debugInfo.push(`Full UA: ${userAgent}`)
+      debugInfo.push(`HTTPS: ${location.protocol === 'https:'}`)
+      debugInfo.push(`Host: ${location.hostname}`)
+
+      // Check navigator existence
+      if (typeof navigator === 'undefined') {
+        results.push('❌ navigator is undefined')
+        debugInfo.push('navigator object missing')
+      } else {
+        results.push('✅ navigator exists')
+
+        // Check MediaDevices existence
+        if (!navigator.mediaDevices) {
+          results.push('❌ navigator.mediaDevices is undefined')
+
+          // Check if it's Safari blocking it
+          if (isSafari) {
+            results.push('🎯 This is expected in Safari on HTTP')
+            debugInfo.push('Safari HTTP restriction detected')
+          } else {
+            results.push('🎯 Unexpected - should be available in Chrome')
+            debugInfo.push('navigator properties:', Object.getOwnPropertyNames(navigator))
+          }
+        } else {
+          results.push('✅ navigator.mediaDevices exists')
+
+          // Check getUserMedia
+          if (!navigator.mediaDevices.getUserMedia) {
+            results.push('❌ getUserMedia method missing')
+            debugInfo.push('Available methods:', Object.getOwnPropertyNames(navigator.mediaDevices))
+          } else {
+            results.push('✅ getUserMedia method available')
+          }
+        }
+      }
+
+      // Try to proceed with other checks even if MediaDevices fails
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        // Check permissions
+        if (navigator.permissions) {
+          try {
+            const result = await navigator.permissions.query({ name: 'camera' as any })
+            results.push(`🔐 Camera permission: ${result.state}`)
+          } catch (e) {
+            results.push('⚠️ Permission check failed')
+            debugInfo.push(`Permission error: ${e}`)
+          }
+        }
+
+        // Test getUserMedia
+        try {
+          results.push('🎥 Testing camera access...')
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' },
+            audio: false
+          })
+          results.push('✅ Camera access successful!')
+          results.push(`📊 Video tracks: ${stream.getVideoTracks().length}`)
+          stream.getTracks().forEach(track => track.stop())
+        } catch (e: any) {
+          results.push(`❌ Camera access failed: ${e.name}`)
+          results.push(`📝 Error: ${e.message}`)
+          debugInfo.push(`Camera error details: ${e}`)
+        }
+      }
+
+    } catch (error: any) {
+      results.push(`❌ Diagnostic crashed: ${error.message}`)
+      debugInfo.push(`Crash details: ${error}`)
+    }
+
+    // Show results in alert
+    const message = 'CAMERA DIAGNOSTIC RESULTS:\n\n' + results.join('\n')
+    alert(message)
+
+    // Show debug info if there were issues
+    if (debugInfo.length > 0) {
+      setTimeout(() => {
+        const debugMessage = 'DEBUG INFO:\n\n' + debugInfo.join('\n')
+        alert(debugMessage)
+      }, 500)
+    }
+
+    // Also log to console for debugging
+    console.log('Camera Diagnostic Results:', results)
+    console.log('Debug Info:', debugInfo)
+  }
+
   // Modal trigger functions (inline in navigation)
 
   return (
@@ -129,6 +232,15 @@ const App: React.FC = () => {
           <button className="flex flex-col items-center justify-center py-3 px-2 hover:bg-neutral-50 transition-colors">
             <ShoppingCart size={20} className="text-neutral-600 mb-1" />
             <span className="text-xs font-medium text-neutral-700">Shop</span>
+          </button>
+
+          {/* Camera Test */}
+          <button
+            onClick={runCameraDiagnostic}
+            className="flex flex-col items-center justify-center py-3 px-2 hover:bg-neutral-50 transition-colors"
+          >
+            <Scan size={20} className="text-neutral-600 mb-1" />
+            <span className="text-xs font-medium text-neutral-700">Test</span>
           </button>
 
           {/* Cache Demo */}

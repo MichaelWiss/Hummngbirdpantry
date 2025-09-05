@@ -6,6 +6,9 @@ import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library'
 import { X, Scan, Camera, AlertCircle } from 'lucide-react'
 import type { Barcode } from '@/types'
 
+// Add PermissionName type for navigator.permissions.query
+type PermissionName = 'camera' | 'microphone' | 'geolocation' | 'notifications'
+
 interface BarcodeScannerProps {
   onBarcodeDetected: (barcode: Barcode) => void
   onError: (error: string) => void
@@ -89,9 +92,10 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
         }
       }
 
-      // If we couldn't enumerate but getUserMedia is available, assume camera exists
-      if (cameras.length === 0 && navigator.mediaDevices.enumerateDevices) {
-        throw new Error('NO_CAMERA')
+      // If enumeration failed but getUserMedia is available, continue anyway
+      // Some browsers restrict enumerateDevices until permission is granted
+      if (cameras.length === 0) {
+        console.warn('⚠️ Could not enumerate cameras, but proceeding with getUserMedia')
       }
 
       // Request camera permission with optimized constraints
@@ -115,6 +119,14 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
     } catch (error: any) {
       console.error('Camera permission error:', error)
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        userAgent: navigator.userAgent,
+        secureContext: window.isSecureContext,
+        location: window.location.href
+      })
       setIsInitializing(false)
 
       // Handle specific error types with detailed user guidance
@@ -223,28 +235,73 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
         return
       }
 
+      // Select the best available camera for barcode scanning
+      let selectedDeviceId: string | undefined
+
+      if (cameras.length > 0) {
+        // Prefer back camera on mobile, front camera on desktop
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+        const backCamera = cameras.find(camera => camera.label.toLowerCase().includes('back') || camera.label.toLowerCase().includes('rear'))
+        const frontCamera = cameras.find(camera => camera.label.toLowerCase().includes('front') || camera.label.toLowerCase().includes('face'))
+
+        if (isMobile && backCamera) {
+          selectedDeviceId = backCamera.deviceId
+          console.log('📷 Using back camera for barcode scanning')
+        } else if (!isMobile && frontCamera) {
+          selectedDeviceId = frontCamera.deviceId
+          console.log('📷 Using front camera for barcode scanning')
+        } else {
+          selectedDeviceId = cameras[0].deviceId
+          console.log('📷 Using first available camera')
+        }
+      }
+
       // Configure ZXing reader for optimal performance
       await codeReader.decodeFromVideoDevice(
-        undefined, // Use default camera
+        selectedDeviceId, // Use selected camera or default
         videoRef.current,
         (result, error) => {
           if (result) {
             // Barcode detected successfully!
             const barcode = result.getText() as Barcode
-            console.log('Barcode detected:', barcode)
+            console.log('✅ Barcode detected:', barcode)
             onBarcodeDetected(barcode)
             stopScanning()
           }
           if (error && !(error instanceof NotFoundException)) {
-            console.error('Barcode scan error:', error)
+            console.error('❌ Barcode scan error:', error)
           }
         }
       )
 
       setIsInitializing(false)
-    } catch (error) {
-      console.error('Failed to start scanning:', error)
-      onError('Failed to start camera. Please try again.')
+    } catch (error: any) {
+      console.error('❌ Failed to start scanning:', error)
+      console.error('🔍 Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        userAgent: navigator.userAgent
+      })
+
+      // Chrome-specific error handling
+      if (error.name === 'NotSupportedError') {
+        console.log('📷 Camera format not supported - trying alternative settings')
+        onError('Camera format not supported. This is usually fixable.')
+      } else if (error.name === 'NotReadableError') {
+        console.log('📷 Camera busy - other app using camera')
+        onError('Camera is busy. Close other camera apps (Zoom, etc.) and try again.')
+      } else if (error.name === 'OverconstrainedError') {
+        console.log('📷 Camera constraints too restrictive - using fallback')
+        onError('Camera settings too restrictive. Using basic settings...')
+      } else if (error.name === 'NotAllowedError') {
+        console.log('📷 Camera permission denied')
+        onError('Camera permission denied. Please click "Allow" when prompted.')
+      } else {
+        console.log('📷 Unknown camera error:', error)
+        onError(`Camera error: ${error.message || 'Unknown error'}. Check console for details.`)
+      }
+
       setIsScanning(false)
       setIsInitializing(false)
     }
@@ -269,7 +326,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     if (hasPermission === true && !isScanning && !isInitializing) {
       startScanning()
     }
-  }, [hasPermission, isScanning, isInitializing])
+  }, [hasPermission, isScanning, isInitializing, startScanning])
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
@@ -471,49 +528,118 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 // Safari-specific camera test
 const testSafariCamera = async () => {
   console.log('🧭 Safari Camera Test Starting...')
+  console.log('====================================')
+  console.log('🔍 SYSTEM INFO:')
+  console.log('   URL:', window.location.href)
+  console.log('   Protocol:', window.location.protocol)
+  console.log('   Hostname:', window.location.hostname)
+  console.log('   User Agent:', navigator.userAgent)
+  console.log('')
 
   try {
     // Test 1: Check if we're in secure context
     console.log('Test 1 - Secure Context:', window.isSecureContext)
+    if (!window.isSecureContext) {
+      console.log('   ❌ NOT SECURE - Safari blocks camera on HTTP!')
+      console.log('   💡 SOLUTION: Use HTTPS or localhost')
+    }
 
     // Test 2: Check if we're in an iframe (Safari blocks camera in iframes)
     console.log('Test 2 - In iFrame:', window !== window.top)
+    if (window !== window.top) {
+      console.log('   ❌ IN IFRAME - Safari blocks camera in iframes!')
+    }
 
     // Test 3: Check navigator.mediaDevices exists
     console.log('Test 3 - navigator.mediaDevices exists:', !!navigator.mediaDevices)
+    if (!navigator.mediaDevices) {
+      console.log('   ❌ MEDIA DEVICES API UNAVAILABLE')
+      console.log('   💡 This is Safari\'s security policy for non-HTTPS sites')
+    }
 
-    if (navigator.mediaDevices) {
-      // Test 4: Check getUserMedia exists
-      console.log('Test 4 - getUserMedia exists:', !!navigator.mediaDevices.getUserMedia)
+    if (!navigator.mediaDevices) {
+      console.log('🚨 CRITICAL: navigator.mediaDevices is undefined!')
+      console.log('   This means Safari is blocking the MediaDevices API')
+      console.log('   Usually caused by:')
+      console.log('   - Running on HTTP (not HTTPS)')
+      console.log('   - Running on IP address (not localhost)')
+      console.log('   - Browser security settings')
+      console.log('')
+      console.log('🔧 QUICK FIXES TO TRY:')
+      console.log('   1. Use HTTPS URL instead: https://192.168.4.240:3002/')
+      console.log('   2. Use localhost: http://localhost:3002/')
+      console.log('   3. Safari Developer Settings:')
+      console.log('      - Settings → Safari → Advanced → Experimental Features')
+      console.log('      - Enable "MediaDevices API in insecure contexts"')
+      console.log('   4. Try Chrome or Firefox (they\'re more permissive)')
+      console.log('')
+      console.log('💡 WORKAROUND: Try using Chrome on your iPhone instead!')
+      console.log('   Chrome is more permissive with camera access on HTTP.')
 
-      // Test 5: Check enumerateDevices exists
-      console.log('Test 5 - enumerateDevices exists:', !!navigator.mediaDevices.enumerateDevices)
-
-      // Test 6: Check available methods
-      console.log('Test 6 - Available methods:', Object.getOwnPropertyNames(navigator.mediaDevices))
-
-      // Test 7: Try to call getUserMedia (this should trigger permission prompt)
-      console.log('Test 7 - Attempting getUserMedia...')
+      // Try to polyfill navigator.mediaDevices for older Safari versions
+      console.log('🔄 Attempting to polyfill MediaDevices API...')
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'user', // Front camera first for Safari
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          }
-        })
-        console.log('✅ getUserMedia SUCCESS!')
-        stream.getTracks().forEach(track => track.stop()) // Clean up
-      } catch (gumError: any) {
-        console.log('❌ getUserMedia FAILED:', gumError.name, gumError.message)
-        console.log('   Common Safari issues:')
-        console.log('   - NotAllowedError: User denied permission')
-        console.log('   - NotFoundError: No camera available')
-        console.log('   - SecurityError: Not in secure context')
+        if (!navigator.mediaDevices && navigator.webkitGetUserMedia) {
+          console.log('   Found webkitGetUserMedia - creating polyfill...')
+          navigator.mediaDevices = {
+            getUserMedia: function(constraints) {
+              return new Promise(function(resolve, reject) {
+                navigator.webkitGetUserMedia(constraints, resolve, reject);
+              });
+            }
+          } as any;
+          console.log('✅ Polyfill created! Retrying test...')
+          // Retry the test
+          return testSafariCamera();
+        }
+      } catch (polyfillError) {
+        console.log('❌ Polyfill failed:', polyfillError)
       }
+
+      console.log('')
+      console.log('🚨 FINAL SOLUTION: Use Chrome on iPhone')
+      console.log('   1. Download Chrome from App Store')
+      console.log('   2. Go to: http://192.168.4.240:3002/')
+      console.log('   3. Run: testSafariCamera()')
+      console.log('   4. Chrome allows camera on HTTP!')
+
+      return { success: false, reason: 'navigator.mediaDevices undefined' }
+    }
+
+    // Test 4: Check getUserMedia exists
+    console.log('Test 4 - getUserMedia exists:', !!navigator.mediaDevices.getUserMedia)
+
+    // Test 5: Check enumerateDevices exists
+    console.log('Test 5 - enumerateDevices exists:', !!navigator.mediaDevices.enumerateDevices)
+
+    // Test 6: Check available methods
+    console.log('Test 6 - Available methods:', Object.getOwnPropertyNames(navigator.mediaDevices))
+
+    // Test 7: Try to call getUserMedia (this should trigger permission prompt)
+    console.log('Test 7 - Attempting getUserMedia...')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user', // Front camera first for Safari
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        }
+      })
+      console.log('✅ getUserMedia SUCCESS!')
+      console.log('   Camera access granted!')
+      stream.getTracks().forEach(track => track.stop()) // Clean up
+      return { success: true, camera: 'granted' }
+    } catch (gumError: any) {
+      console.log('❌ getUserMedia FAILED:', gumError.name, gumError.message)
+      console.log('   Common Safari issues:')
+      console.log('   - NotAllowedError: User denied permission')
+      console.log('   - NotFoundError: No camera available')
+      console.log('   - SecurityError: Not in secure context')
+      return { success: false, error: gumError.name, message: gumError.message }
     }
   } catch (error) {
     console.error('🧭 Safari test failed:', error)
+    return { success: false, error: 'test_failed', details: error }
   }
 }
 
@@ -558,6 +684,177 @@ if (typeof window !== 'undefined') {
 // Firefox-specific camera test (available in console as testFirefoxCamera())
 if (typeof window !== 'undefined') {
   (window as any).testFirefoxCamera = testFirefoxCamera
+}
+
+// Chrome camera diagnostic (available in console as diagnoseChromeCamera())
+if (typeof window !== 'undefined') {
+  (window as any).diagnoseChromeCamera = async () => {
+    console.log('🔧 CHROME CAMERA DIAGNOSTIC')
+    console.log('===========================')
+    console.log('')
+
+    // Basic checks
+    console.log('📱 Basic API Check:')
+    console.log(`   navigator.mediaDevices: ${!!navigator.mediaDevices}`)
+    console.log(`   getUserMedia: ${!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)}`)
+    console.log('')
+
+    // Permission check
+    console.log('🔐 Permission Check:')
+    if (navigator.permissions) {
+      try {
+        const result = await navigator.permissions.query({ name: 'camera' as PermissionName })
+        console.log(`   Camera permission: ${result.state}`)
+      } catch (e) {
+        console.log(`   Permission check failed: ${e}`)
+      }
+    } else {
+      console.log('   Permissions API not available')
+    }
+    console.log('')
+
+    // Camera enumeration
+    console.log('📷 Camera Enumeration:')
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        const cameras = devices.filter(d => d.kind === 'videoinput')
+        console.log(`   Cameras found: ${cameras.length}`)
+        cameras.forEach((cam, i) => {
+          console.log(`   Camera ${i + 1}: ${cam.label || 'Unnamed'} (${cam.deviceId.slice(0, 8)}...)`)
+        })
+      } catch (e) {
+        console.log(`   Camera enumeration failed: ${e}`)
+      }
+    } else {
+      console.log('   enumerateDevices not available')
+    }
+    console.log('')
+
+    // Test getUserMedia
+    console.log('🎥 Testing getUserMedia:')
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        console.log('   Attempting getUserMedia...')
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        })
+        console.log('   ✅ getUserMedia SUCCESS!')
+        console.log(`   Stream tracks: ${stream.getTracks().length}`)
+        stream.getTracks().forEach(track => track.stop())
+      } catch (e: any) {
+        console.log(`   ❌ getUserMedia FAILED: ${e.name} - ${e.message}`)
+        console.log(`   Error details:`, e)
+      }
+    } else {
+      console.log('   ❌ getUserMedia not available')
+    }
+    console.log('')
+
+    console.log('💡 TROUBLESHOOTING:')
+    console.log('   1. Make sure no other apps are using the camera')
+    console.log('   2. Try refreshing the page')
+    console.log('   3. Check Chrome camera permissions')
+    console.log('   4. Try different camera if multiple available')
+  }
+}
+
+// Comprehensive Safari camera debugging utility
+if (typeof window !== 'undefined') {
+  (window as any).debugSafariCamera = async () => {
+    console.log('🔧 SAFARI CAMERA DEBUG UTILITY')
+    console.log('==============================')
+    console.log('')
+
+    // System Information
+    console.log('📊 SYSTEM INFORMATION:')
+    console.log(`   URL: ${window.location.href}`)
+    console.log(`   Protocol: ${window.location.protocol}`)
+    console.log(`   Hostname: ${window.location.hostname}`)
+    console.log(`   Secure Context: ${window.isSecureContext}`)
+    console.log(`   In iFrame: ${window !== window.top}`)
+    console.log(`   User Agent: ${navigator.userAgent}`)
+    console.log('')
+
+    // Safari Detection
+    const isSafari = navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome')
+    console.log('🎯 SAFARI DETECTION:')
+    console.log(`   Is Safari: ${isSafari}`)
+    if (isSafari) {
+      const version = navigator.userAgent.match(/Version\/(\d+)/)?.[1] || 'Unknown'
+      console.log(`   Safari Version: ${version}`)
+      console.log(`   MediaDevices Expected: ✅ (Safari ${version} supports it)`)
+    }
+    console.log('')
+
+    // MediaDevices API Status
+    console.log('📷 MEDIA DEVICES API:')
+    console.log(`   navigator.mediaDevices: ${!!navigator.mediaDevices}`)
+    if (navigator.mediaDevices) {
+      console.log(`   getUserMedia: ${!!navigator.mediaDevices.getUserMedia}`)
+      console.log(`   enumerateDevices: ${!!navigator.mediaDevices.enumerateDevices}`)
+    } else {
+      console.log('   ❌ CRITICAL: MediaDevices API is completely blocked!')
+    }
+    console.log('')
+
+    // Permission Status
+    console.log('🔐 PERMISSION STATUS:')
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const result = await navigator.permissions.query({ name: 'camera' as PermissionName })
+        console.log(`   Camera Permission: ${result.state}`)
+      } catch (error) {
+        console.log(`   Permission Check Failed: ${error}`)
+      }
+    } else {
+      console.log('   Permissions API: Not available')
+    }
+    console.log('')
+
+    // Root Cause Analysis
+    console.log('🔍 ROOT CAUSE ANALYSIS:')
+    if (!window.isSecureContext) {
+      console.log('   ❌ NOT SECURE CONTEXT')
+      console.log('   Safari blocks MediaDevices API on HTTP!')
+      console.log('   SOLUTION: Use HTTPS or localhost')
+    } else if (!navigator.mediaDevices) {
+      console.log('   ❌ MEDIA DEVICES API BLOCKED')
+      console.log('   This should not happen on modern Safari with HTTPS')
+      console.log('   POSSIBLE CAUSES:')
+      console.log('   - Content Security Policy blocking')
+      console.log('   - Browser extension interference')
+      console.log('   - Safari privacy settings')
+    } else {
+      console.log('   ✅ API AVAILABLE - Permission issue')
+      console.log('   Try granting camera permission when prompted')
+    }
+    console.log('')
+
+    // Action Plan
+    console.log('🚀 ACTION PLAN:')
+    if (!window.isSecureContext) {
+      console.log('   1. Use HTTPS URL instead of HTTP')
+      console.log('   2. Or access via localhost: http://localhost:3002/')
+      console.log('   3. Accept any security warnings')
+    } else if (!navigator.mediaDevices) {
+      console.log('   1. Check Safari privacy settings')
+      console.log('   2. Disable any privacy extensions')
+      console.log('   3. Try Safari in private browsing mode')
+      console.log('   4. Clear Safari website data')
+    } else {
+      console.log('   1. When camera prompt appears, click "Allow"')
+      console.log('   2. Check Safari camera permissions in Settings')
+      console.log('   3. Try refreshing the page')
+    }
+    console.log('')
+
+    // Quick Test
+    console.log('🧪 QUICK TEST:')
+    console.log('   Run the following in console:')
+    console.log('   testSafariCamera()')
+  }
 }
 
 // Diagnostic utility for camera troubleshooting (can be called from browser console)
@@ -643,9 +940,16 @@ if (typeof window !== 'undefined') {
       const isSecureContext = window.isSecureContext
       console.log(`   Secure Context: ${isSecureContext ? '✅' : '❌'}`)
       console.log(`   User Gesture Required: Safari requires user gesture for camera access`)
+    console.log(`   Current Protocol: ${location.protocol}`)
+    console.log(`   Is Localhost: ${['localhost', '127.0.0.1', '::1'].includes(location.hostname)}`)
+    console.log(`   ⚠️ CRITICAL: Safari blocks MediaDevices API on HTTP (except localhost)`)
 
       if (!isSecureContext) {
         console.log(`   ⚠️ Safari requires secure context for camera access`)
+        if (location.protocol === 'http:' && !['localhost', '127.0.0.1', '::1'].includes(location.hostname)) {
+          console.log(`   🚨 DETECTED: You're running on HTTP with IP address ${location.hostname}`)
+          console.log(`   🚨 SOLUTION: Use https:// or localhost instead`)
+        }
       }
 
       // Check if we're in an iframe (Safari blocks camera in iframes)

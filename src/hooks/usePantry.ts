@@ -46,7 +46,7 @@ export const usePantry = () => {
       searchQuery.trim().length > 0 ||
       filters.dateRange !== undefined
     )
-  }, [store.filters, store.searchQuery])
+  }, [store])
 
   return {
     // Core data

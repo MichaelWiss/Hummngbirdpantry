@@ -3,9 +3,8 @@
 
 import React, { useState } from 'react'
 import { useBarcodeCache } from '@/hooks/useBarcodeCache'
-import { BarcodeService } from '@/services/barcode.service'
 import type { Barcode, PantryItem } from '@/types'
-import { Database, Zap, Wifi, WifiOff, Trash2, RefreshCw, Download, Upload, Search } from 'lucide-react'
+import { Database, Zap, Wifi, WifiOff, Trash2, RefreshCw, Search } from 'lucide-react'
 
 const CacheDemo: React.FC = () => {
   const cache = useBarcodeCache()
@@ -201,7 +200,7 @@ const CacheDemo: React.FC = () => {
           <div className="p-4 bg-gray-50 rounded-lg">
             <h4 className="font-medium text-gray-900 mb-2">Cached Lookup (Instant)</h4>
             <p className="text-sm text-gray-600 mb-3">
-              Try scanning a barcode that's already cached. Notice the ⚡ instant response!
+              Try scanning a barcode that&apos;s already cached. Notice the ⚡ instant response!
             </p>
             <div className="text-xs text-gray-500">
               Cached barcodes load in &lt;10ms vs 800ms for uncached lookups

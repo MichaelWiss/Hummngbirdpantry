@@ -54,8 +54,8 @@ export default defineConfig(({ mode }) => ({
     // Host configuration for mobile testing - bind to all interfaces
     host: '0.0.0.0',
 
-    // HTTPS for camera and microphone APIs (optional for development)
-    https: mode === 'production',
+    // HTTPS disabled - use Chrome instead for camera access
+    https: false,
 
     // CORS configuration for external API development
     cors: true,

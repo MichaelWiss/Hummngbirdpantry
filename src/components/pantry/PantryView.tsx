@@ -1,13 +1,64 @@
 // Pantry View Component - Enhanced with barcode scanning
 // Professional pantry management with real-time barcode scanning
 
-import React, { useState } from 'react'
-import { Scan, Plus } from 'lucide-react'
+import React from 'react'
+// Icons are not used in this component, they were moved to the bottom navigation
 import { usePantry, usePantryStats } from '@/hooks/usePantry'
-import { useBarcodeScanner } from '@/hooks/useBarcodeScanner'
-import BarcodeScanner from '@/components/barcode/BarcodeScanner'
-import AddItemModal from '@/components/pantry/AddItemModal'
-import type { ItemCategory, MeasurementUnit } from '@/types'
+// Barcode scanner handled by parent App component
+// import { useBarcodeScanner } from '@/hooks/useBarcodeScanner'
+// Modals are handled by parent App component
+// import BarcodeScanner from '@/components/barcode/BarcodeScanner'
+// import AddItemModal from '@/components/pantry/AddItemModal'
+import type { PantryItem } from '@/types'
+
+// PantryItemCard Component
+const PantryItemCard: React.FC<{ item: PantryItem }> = ({ item }) => {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'fresh': return 'bg-green-100 text-green-800'
+      case 'expiring-soon': return 'bg-yellow-100 text-yellow-800'
+      case 'expired': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric'
+    }).format(date)
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
+      <div className="flex justify-between items-start mb-3">
+        <h3 className="font-semibold text-gray-900 truncate">{item.name}</h3>
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
+          {item.status.replace('-', ' ')}
+        </span>
+      </div>
+
+      <div className="space-y-2 text-sm text-gray-600">
+        <div className="flex justify-between">
+          <span>Quantity:</span>
+          <span className="font-medium">{item.quantity} {item.unit}</span>
+        </div>
+
+        <div className="flex justify-between">
+          <span>Expires:</span>
+          <span className="font-medium">{item.expirationDate ? formatDate(item.expirationDate) : 'N/A'}</span>
+        </div>
+
+        {item.barcode && (
+          <div className="flex justify-between">
+            <span>Barcode:</span>
+            <span className="font-mono text-xs bg-gray-100 px-1 rounded">{item.barcode.slice(-6)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ============================================================================
 // MAIN PANTRY VIEW COMPONENT
@@ -21,16 +72,16 @@ const PantryView: React.FC = () => {
     error,
     searchQuery,
     setSearchQuery,
-    addItem,
     clearError
   } = usePantry()
 
   const stats = usePantryStats()
-  const barcodeScanner = useBarcodeScanner()
+  // Barcode scanner handled by parent App component
+  // const barcodeScanner = useBarcodeScanner()
 
-  // Local state for modals
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
+  // Remove conflicting local state - navigation is handled by parent App component
+  // const [showAddForm, setShowAddForm] = useState(false)
+  // const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
 
   return (
     <div className="space-y-6 md:space-y-8 max-w-7xl mx-auto px-4 sm:px-0">
@@ -121,8 +172,9 @@ const PantryView: React.FC = () => {
             Start by adding your first pantry item
           </p>
           <button
-            onClick={() => setShowAddForm(true)}
-            className="bg-primary-500 hover:bg-primary-600 text-white px-8 py-4 md:px-6 md:py-3 rounded-lg font-medium text-lg md:text-base transition-colors"
+            className="bg-primary-500 hover:bg-primary-600 text-white px-8 py-4 md:px-6 md:py-3 rounded-lg font-medium text-lg md:text-base transition-colors opacity-50 cursor-not-allowed"
+            disabled
+            title="Use the navigation bar below to add items"
           >
             Add Your First Item
           </button>
@@ -142,58 +194,9 @@ const PantryView: React.FC = () => {
         </div>
       )}
 
-      {/* Barcode Scanner Modal */}
-      {showBarcodeScanner && (
-        <BarcodeScanner
-          onBarcodeDetected={async (barcode) => {
-            try {
-              console.log('🔍 Barcode scanned from main view:', barcode)
-              const result = await barcodeScanner.onBarcodeDetected(barcode)
+      {/* Barcode scanner modal handled by parent App component */}
 
-              if (result.found && result.productData) {
-                // Quick add with confirmation
-                const confirmed = confirm(
-                  `Add "${result.productData.name}" to your pantry?`
-                )
-
-                if (confirmed) {
-                  await barcodeScanner.quickAddScannedItem(
-                    result.barcode,
-                    result.productData,
-                    1
-                  )
-                  console.log('✅ Item added via barcode scan')
-                } else {
-                  // User cancelled - open manual add form with barcode pre-filled
-                  setShowAddForm(true)
-                }
-              } else {
-                // Product not found - open manual add form
-                console.log('⚠️ Product not found, opening manual add form')
-                setShowAddForm(true)
-              }
-
-              setShowBarcodeScanner(false)
-            } catch (error) {
-              console.error('❌ Barcode processing error:', error)
-              alert('Failed to process barcode. Please try again.')
-            }
-          }}
-          onError={(error) => {
-            console.error('❌ Scanner error:', error)
-            alert(`Scanner error: ${error}`)
-            setShowBarcodeScanner(false)
-          }}
-          onClose={() => setShowBarcodeScanner(false)}
-        />
-      )}
-
-      {/* Add Item Modal */}
-      {showAddForm && (
-        <AddItemModal
-          onClose={() => setShowAddForm(false)}
-        />
-      )}
+      {/* Modals are handled by parent App component */}
     </div>
   )
 }

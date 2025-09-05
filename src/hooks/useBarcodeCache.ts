@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { BarcodeService } from '@/services/barcode.service'
-import type { Barcode, PantryItem, BarcodeCacheStats, CacheLookupResult } from '@/types'
+import type { Barcode, PantryItem, BarcodeCacheStats } from '@/types'
 
 interface BarcodeCacheState {
   isInitialized: boolean
@@ -25,7 +25,7 @@ export const useBarcodeCache = () => {
   // Initialize cache on mount
   useEffect(() => {
     initializeCache()
-  }, [])
+  }, [initializeCache])
 
   // Initialize the cache system
   const initializeCache = useCallback(async () => {

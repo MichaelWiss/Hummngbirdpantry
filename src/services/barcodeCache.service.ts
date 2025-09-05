@@ -458,7 +458,7 @@ class BarcodeCacheService {
       throw new Error('Cache not initialized')
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const transaction = this.db!.transaction([CACHE_STORE], 'readwrite')
       const store = transaction.objectStore(CACHE_STORE)
 

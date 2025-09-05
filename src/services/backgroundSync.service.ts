@@ -2,11 +2,10 @@
 // Handles online/offline state management and background data synchronization
 
 import { BarcodeService } from './barcode.service'
-import { barcodeCache } from './barcodeCache.service'
-import type { BarcodeCacheEntry, BarcodeCacheConfig } from '@/types'
+import type { BarcodeCacheConfig } from '@/types'
 
 class BackgroundSyncService {
-  private syncInterval: NodeJS.Timeout | null = null
+  private syncInterval: number | null = null
   private isOnline: boolean = navigator.onLine
   private config: BarcodeCacheConfig
   private pendingSyncs: Set<string> = new Set()
@@ -163,9 +162,8 @@ class BackgroundSyncService {
 
       console.log('🔄 Performing incremental cache sync...')
 
-      // Get recently accessed barcodes (last 24 hours)
-      const recentThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000)
-      const recentBarcodes = await this.getRecentlyAccessedBarcodes(recentThreshold)
+      // Get recently accessed barcodes
+      const recentBarcodes = await this.getRecentlyAccessedBarcodes()
 
       if (recentBarcodes.length === 0) {
         console.log('📭 No recently accessed barcodes to sync')
@@ -213,7 +211,7 @@ class BackgroundSyncService {
 
       // In a real implementation, this would call a remote API
       // For now, we'll simulate API validation
-      const mockApiResponse = await this.simulateApiLookup(barcode)
+      const mockApiResponse = await this.simulateApiLookup()
 
       if (mockApiResponse) {
         // Update cache with fresh data from API
@@ -231,7 +229,7 @@ class BackgroundSyncService {
   }
 
   // Get recently accessed barcodes
-  private async getRecentlyAccessedBarcodes(since: Date): Promise<string[]> {
+  private async getRecentlyAccessedBarcodes(): Promise<string[]> {
     try {
       // This would require extending the cache service to support date queries
       // For now, return a sample of cached barcodes
@@ -244,7 +242,7 @@ class BackgroundSyncService {
   }
 
   // Simulate API lookup (replace with real API call)
-  private async simulateApiLookup(barcode: string): Promise<any | null> {
+  private async simulateApiLookup(): Promise<any | null> {
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 200))
 

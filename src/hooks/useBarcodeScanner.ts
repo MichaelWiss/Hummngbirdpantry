@@ -4,7 +4,7 @@
 import { useState, useCallback } from 'react'
 import { usePantry } from '@/hooks/usePantry'
 import { BarcodeService } from '@/services/barcode.service'
-import type { Barcode, PantryItem } from '@/types'
+import type { Barcode, PantryItem, ItemCategory, MeasurementUnit } from '@/types'
 
 interface BarcodeScannerState {
   isScanning: boolean

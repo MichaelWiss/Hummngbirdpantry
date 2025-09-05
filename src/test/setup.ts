@@ -1,7 +1,7 @@
 // Test environment setup for Vitest + React Testing Library
 // This file configures the testing environment with necessary mocks and utilities
 
-import { expect, afterEach, beforeAll, vi } from 'vitest'
+import { expect, afterEach, beforeAll, afterAll, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import * as matchers from '@testing-library/jest-dom/matchers'
 import { server } from './mocks/server'
@@ -229,7 +229,7 @@ export const mockConsole = () => {
 
   return {
     restore: () => {
-      mockMethods.forEach(method => {
+      mockMethods.forEach(() => {
         vi.restoreAllMocks()
       })
     },

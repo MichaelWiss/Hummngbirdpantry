@@ -134,7 +134,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose }) => {
                 <span className="font-medium text-green-800">Product Found!</span>
               </div>
               <p className="text-green-700 text-sm">
-                "{barcodeScanner.lookupResult.productData?.name}" has been auto-filled below.
+                &quot;{barcodeScanner.lookupResult.productData?.name}&quot; has been auto-filled below.
                 Review and adjust the details as needed.
               </p>
             </div>

@@ -5,7 +5,6 @@ import type {
   Barcode,
   PantryItem,
   ItemCategory,
-  MeasurementUnit,
   CacheLookupResult
 } from '@/types'
 import {
@@ -307,7 +306,7 @@ export class BarcodeService {
     const lowercaseQuery = query.toLowerCase()
 
     return Object.entries(BARCODE_DATABASE)
-      .filter(([_, product]) =>
+      .filter(([, product]) =>
         product.name?.toLowerCase().includes(lowercaseQuery) ||
         product.brand?.toLowerCase().includes(lowercaseQuery)
       )
@@ -320,7 +319,7 @@ export class BarcodeService {
   // Get product suggestions based on category
   static getSuggestionsByCategory(category: ItemCategory): Array<{ barcode: Barcode; product: Partial<PantryItem> }> {
     return Object.entries(BARCODE_DATABASE)
-      .filter(([_, product]) => product.category === category)
+      .filter(([, product]) => product.category === category)
       .map(([barcode, product]) => ({
         barcode: barcode as Barcode,
         product
