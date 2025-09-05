@@ -34,6 +34,25 @@
   - **Hooks**: `useCameraPermissions`, `useBarcodeZxing` (initial)
   - **Benefit**: Simplifies orchestrator testing & state isolation
 
+### 2025-09-05 - Barcode Scanner Stability Rollback & Fix
+- [x] **Restored reliable camera feed across browsers (Chrome primary; Safari overlay artifact resolved)**
+  - **Problem**: Refactor introduced multi-phase initialization (preflight getUserMedia + ZXing start + restarts) causing black/ flashing video and duplicate overlays; Safari/Firefox showed live track without rendered frames (0×0 dimensions) and IndexSizeError spam.
+  - **Root Causes**:
+    - Early permission stream stopped before ZXing attached its own → race leaving video element without srcObject.
+    - Reader resets / fallback timers during attachment window.
+    - Overlay duplication from multiple mounts / layered focus frames creating double-border illusion (Safari).
+  - **Solution**: Replaced layered logic with a minimal deterministic pipeline:
+    1. Single getUserMedia acquisition (environment facingMode hint).
+    2. Bind stream directly to video; wait loadedmetadata.
+    3. Start continuous decode via `BrowserMultiFormatReader.decodeFromVideoElementContinuously` (no device re-open).
+    4. Simplified state (isInitializing, isScanning, hasPermission); removed restarts, polling, activation fallback, diagnostics interval.
+    5. Simplified `ScannerOverlay` to a single border + scan bar; added `pointer-events-none`.
+  - **Files Modified**: `src/components/barcode/BarcodeScanner.tsx`, `src/components/barcode/ui/ScannerOverlay.tsx`.
+  - **Key Decisions**: Prefer stability-first baseline; postpone advanced features until after verified multi-browser feed.
+  - **Testing**: Verified live feed and decoding on Chrome; Safari double-border removed after overlay simplification; awaiting extended Firefox/Safari decode verification.
+  - **Next Steps**: (Deferred) Single-shot mode toggle, device switch UI, decode throttling, re-introduction of diagnostics behind a flag.
+
+
 
 ---
 

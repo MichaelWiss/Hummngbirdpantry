@@ -78,6 +78,30 @@
 
 ### [ ] Phase 10: Enterprise Features (Future)
 
+## Recent Regression Report (2025-09-05) - Barcode Scanner
+
+### Diagnosis Summary
+- Symptoms: Black/flash video, 0×0 video dimensions, IndexSizeError logs, duplicate overlay appearance (Safari), inconsistent auto-start.
+- Root Causes:
+  1. Multi-stage init (permission preflight stream stopped before ZXing attach) introduced race where video never received a bound stream.
+  2. Redundant activation fallback & restart timers resetting the ZXing reader during attachment.
+  3. Overlay duplication illusion from nested focus frame + strict/dev double mount behavior.
+  4. Continuous decode attempted on a video element with zero dimensions → transient canvas read errors.
+
+### Resolution Steps
+1. Removed preflight + restart logic; single deterministic getUserMedia → bind → loadedmetadata wait.
+2. Switched to `decodeFromVideoElementContinuously` to avoid device re-open timing issues.
+3. Simplified state and removed diagnostics interval / fallback timers.
+4. Consolidated overlay to a single layer (no nested frame) + pointer-events-none.
+5. Added clear documentation of causes & deferred enhancements.
+
+### Remaining / Deferred Enhancements
+- Optional single-shot barcode mode (auto-stop after first decode).
+- Camera/device switcher UI.
+- Optional diagnostics flag for future debugging.
+- Fallback constraint negotiation for older Safari / Firefox edge cases if reported.
+
+
 ## Task Dependencies & Prerequisites
 
 ### [ ] Critical Path Dependencies
