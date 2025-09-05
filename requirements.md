@@ -145,12 +145,12 @@ HummingbirdPantry is a comprehensive inventory management application designed t
 
 ### Technology Stack
 - **Frontend Framework**: React 18+ with TypeScript
-- **Build Tool**: Vite for fast development and optimized builds
-- **Styling**: CSS Modules with design system (Radix UI + Tailwind)
-- **State Management**: React Context + useReducer with middleware
-- **Data Persistence**: IndexedDB for complex data, localStorage for settings
-- **Testing**: Vitest + React Testing Library + Playwright
-- **PWA**: Service workers for offline functionality
+- **Build Tool**: Vite (fast dev, optimized builds)
+- **Styling**: Tailwind + Radix UI (utility + accessible primitives)
+- **State Management**: Zustand (initial plan for Context+Reducer superseded) + focused domain hooks
+- **Data Persistence**: Planned IndexedDB (pantry, caches) + localStorage for lightweight settings
+- **Testing**: Vitest + React Testing Library + Playwright (progressive rollout)
+- **PWA**: Service worker & offline (planned)
 
 ### Advanced Technical Features
 
@@ -170,10 +170,10 @@ HummingbirdPantry is a comprehensive inventory management application designed t
 ### Architecture Requirements
 
 #### State Management
-- **Centralized State**: Single source of truth using Context API
-- **Action-based Updates**: Predictable state mutations through dispatcher
-- **Custom Hooks**: Reusable logic (usePantry, useShopping, useChat)
-- **Middleware**: Logging, persistence, and error handling
+- **Store Architecture**: Zustand store slices for pantry, scanner, future shopping
+- **Hooks**: Domain hooks (usePantry, useCameraPermissions, useBarcodeZxing, useBarcodeCache planned)
+- **Persistence**: Middleware for localStorage & IndexedDB (planned)
+- **Rationale**: Lower boilerplate & fine-grained subscriptions vs Context reducer
 
 #### Component Architecture
 ```
@@ -230,11 +230,15 @@ App (Context Provider + Theme Provider)
 - **Memory Management**: Proper cleanup and garbage collection
 
 ### Security & Privacy Requirements
+- **Secret Hygiene**: No private keys committed; history purge if exposure occurs
+- **Secret Scanning**: Pre-commit detect-secrets + PEM blocker
+- **HTTPS Dev**: Optional local HTTPS for iOS camera (self-signed cert guidance)
 - **Data Privacy**: Local-first with optional encrypted cloud sync
-- **Input Validation**: Comprehensive sanitization and type checking
-- **API Security**: Secure key management and rate limiting
-- **Camera Permissions**: Transparent permission handling
-- **Voice Data**: Local processing with privacy controls
+- **Input Validation**: Sanitization + TypeScript type safety
+- **API Security**: Secure key handling (env vars) + rate limiting (future)
+- **Camera Permissions**: Explicit user gesture + secure-context guard
+- **Voice Data**: Local processing (no remote send) unless user opts-in
+- **Future Hardening**: CSP, SW integrity, dependency audit CI
 
 ## Non-Functional Requirements
 

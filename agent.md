@@ -9,9 +9,9 @@ The HummingbirdPantry development agent is an AI-powered coding assistant design
 ### Core Development Skills
 - **Full-Stack Development**: React 18, TypeScript, Vite, Node.js
 - **Modern UI/UX**: Tailwind CSS, Radix UI, responsive design
-- **State Management**: Context API, useReducer, custom hooks
+- **State Management**: Zustand store + focused hooks (migrating from initial Context draft)
 - **Testing**: Vitest, React Testing Library, Playwright
-- **Code Quality**: ESLint, Prettier, Husky pre-commit hooks
+- **Code Quality**: ESLint, Prettier, Husky pre-commit hooks, secret scanning
 - **Performance**: Bundle optimization, lazy loading, virtual scrolling
 
 ### Specialized Features
@@ -69,19 +69,19 @@ min-h-[44px] /* iOS touch target */
 
 ## 🎯 Key Achievements
 
-### ✅ Completed Features
-- **Project Foundation**: Complete React 18 + TypeScript setup
-- **Core Pantry System**: Full CRUD operations with validation
-- **Barcode Scanning**: Real-time camera integration with product lookup
-- **Mobile Optimization**: Strictly one-column layout with iPhone optimization
-- **State Management**: Robust Context + useReducer with persistence
-- **Data Models**: Comprehensive TypeScript interfaces and branded types
+### ✅ Recent Highlights
+- **Security Hardening**: Removed committed TLS key, added secret scanning hooks, HTTPS env path support
+- **Scanner Refactor (In Progress)**: Modular UI components + permission & ZXing hooks
+- **Project Foundation**: React 18 + TypeScript base
+- **Pantry System (Initial)**: Core item management groundwork
+- **Mobile Optimization**: Single-column mobile-first layout
+- **Data Models**: Comprehensive TypeScript interfaces & branded types
 
-### 📊 Progress Metrics
-- **Overall Progress**: 50% Complete (Phase 2 ✅)
-- **Code Quality**: 100% TypeScript coverage in implemented features
-- **Mobile Experience**: Optimized for iPhone with 44px touch targets
-- **Performance**: Fast loading with <200KB gzipped bundle target
+### 📊 Progress Snapshot
+- **Overall Progress**: Core scaffolding + early feature layer
+- **Immediate Focus**: Barcode scanner modularization & test harness
+- **Mobile Experience**: Single-column + permission UX improvements
+- **Performance Target**: <200KB initial gzipped bundle (analysis pending)
 
 ## 🔄 Development Process
 
@@ -182,12 +182,11 @@ npm run build         # Production build verification
 ## 🤝 Agent Collaboration
 
 ### Communication Style
-- **Direct Responses**: Clear, concise, action-oriented
-- **Structured Planning**: Todo lists for complex multi-step tasks
-- **Proactive Updates**: Automatic progress tracking and documentation
-- **Error Prevention**: Linting and type checking before implementation
-- **Always ask**: before implementing new code or changes in files.  Provide step by step analysis before asking for permission to continue with changes.
-- **Review Documents**: When implementing a solution review the documents to insure continuity
+- **Concise & Action-Oriented**
+- **Structured Planning via Todo Lists**
+- **Proactive Documentation Updates**
+- **Validation First**: Lint & type-check before commits
+- **Security Awareness**: Secret scanning + key hygiene integrated
 
 ### Quality Assurance
 - **Type Safety**: 100% TypeScript coverage
@@ -222,11 +221,10 @@ src/
 
 ## 🎯 Success Metrics
 
-### Development Velocity
-- **Sprint Completion**: 95% of planned tasks completed
-- **Code Quality**: Zero critical linting errors
-- **Performance**: Consistent Lighthouse scores >90
-- **User Experience**: Intuitive mobile-first interface
+### Development Signals
+- **Security**: Secrets tooling active
+- **Code Quality**: Lint + format enforced
+- **Next Risk Area**: Camera/permission edge cases & offline strategy
 
 ### Feature Completeness
 - **Core Functionality**: 95% complete (Phase 2 ✅)
@@ -238,11 +236,12 @@ src/
 
 ## 🚀 Next Steps
 
-### Immediate Priorities (Phase 2.5)
-1. **Voice Recognition**: Implement Web Speech API integration
-2. **Photo Capture**: Add camera access for item photos
-3. **Advanced Details**: Expiration dates, nutrition info, pricing
-4. **Smart Features**: Usage analytics and predictive suggestions
+### Immediate Priorities (Current Sprint)
+1. Finalize modular barcode scanner & extract diagnostics
+2. Implement unit tests for camera + scanning hooks
+3. Add offline barcode cache service
+4. Manual barcode entry regression check
+5. History purge verification (post key removal)
 
 ### Long-term Vision
 - **AI Integration**: Machine learning for smart recommendations

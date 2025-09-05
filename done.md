@@ -12,6 +12,29 @@
 ### Project Documentation & Planning
 *All documentation tasks have been completed as part of the initial project planning phase*
 
+### 2025-09-05 - Security & Tooling
+- [x] **Removed committed dev TLS private key & certificate**
+  - **Implementation details**: Deleted `key.pem` / `cert.pem`, added `.gitignore` patterns
+  - **Files modified**: `.gitignore`, removed key/cert
+  - **Key decisions**: Enforce local-only generation
+- [x] **Hardened HTTPS dev configuration**
+  - **Implementation details**: Env var overrides `VITE_HTTPS_CERT_PATH` / `VITE_HTTPS_KEY_PATH`, graceful fallback
+  - **Files modified**: `vite.config.ts`
+- [x] **Added secret scanning pre-commit hooks**
+  - **Implementation details**: `detect-secrets` baseline + PEM blocker hook
+  - **Files created**: `.pre-commit-config.yaml`, `.secrets.baseline`
+- [x] **Created security and remediation docs**
+  - **Docs**: `SECURITY.md`, `ROTATE_KEYS.md`, `docs/secrets-scanning.md`, `docs/local-https.md`, updated `cert.README.md`
+- [x] **Added comprehensive README**
+  - **Focus**: Current architecture, security steps, roadmap
+- [x] **Modularized barcode scanner UI**
+  - **Implementation**: Extracted viewport, overlay, permission, ready, insecure context banner components
+  - **Next**: Extract diagnostics + integrate `useBarcodeZxing`
+- [x] **Introduced permission & ZXing hooks**
+  - **Hooks**: `useCameraPermissions`, `useBarcodeZxing` (initial)
+  - **Benefit**: Simplifies orchestrator testing & state isolation
+
+
 ---
 
 ## Completed Milestones

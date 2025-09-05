@@ -19,9 +19,9 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-    <!-- Preload critical resources for better performance -->
-    <link rel="preload" href="/src/assets/styles/index.css" as="style" />
-    <link rel="modulepreload" href="/src/main.tsx" />
+  <!-- Load main stylesheet (previous preload caused Safari warnings) -->
+  <link rel="stylesheet" href="/src/assets/styles/index.css" />
+  <!-- Vite will handle module preloading; explicit modulepreload removed to reduce console noise -->
 
     <!-- App title -->
     <title>HummingbirdPantry - Smart Pantry Management</title>

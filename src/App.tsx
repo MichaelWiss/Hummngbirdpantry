@@ -16,8 +16,32 @@ const App: React.FC = () => {
   const [showAddItemModal, setShowAddItemModal] = React.useState(false)
   const [currentView, setCurrentView] = React.useState<'pantry' | 'demo'>('pantry')
 
-  // Initialize barcode cache on app startup
+  // Dev-only: filter a benign ZXing / video element warning that can appear once during
+  // stream handoff ("Trying to play video that is already playing."). This prevents
+  // log noise without hiding other warnings. Guarded so we don't wrap multiple times
+  // on Vite HMR / React Fast Refresh.
   React.useEffect(() => {
+    if (!(import.meta as any).env?.DEV) return
+    const c: any = console as any
+    if (c._hbWarnPatched) return
+    c._hbWarnPatched = true
+    const originalWarn = console.warn
+    console.warn = (...args: any[]) => {
+      try {
+        const first = args[0]
+        if (typeof first === 'string') {
+          if (/Trying to play video that is already playing/i.test(first)) return
+        }
+      } catch { /* ignore filter errors */ }
+      originalWarn(...args)
+    }
+  }, [])
+
+  // Initialize barcode cache on app startup
+  const initRunRef = React.useRef(false)
+  React.useEffect(() => {
+    if (initRunRef.current) return
+    initRunRef.current = true
     const initializeCache = async () => {
       try {
         // Import cache services dynamically to avoid circular dependencies
@@ -43,8 +67,8 @@ const App: React.FC = () => {
 
   // Camera diagnostic function (no console needed)
   const runCameraDiagnostic = async () => {
-    const results = []
-    const debugInfo = []
+  const results: string[] = []
+  const debugInfo: string[] = []
 
     try {
       // Browser detection
@@ -77,7 +101,7 @@ const App: React.FC = () => {
             debugInfo.push('Safari HTTP restriction detected')
           } else {
             results.push('🎯 Unexpected - should be available in Chrome')
-            debugInfo.push('navigator properties:', Object.getOwnPropertyNames(navigator))
+            debugInfo.push('navigator properties: ' + Object.getOwnPropertyNames(navigator).join(','))
           }
         } else {
           results.push('✅ navigator.mediaDevices exists')
@@ -85,7 +109,7 @@ const App: React.FC = () => {
           // Check getUserMedia
           if (!navigator.mediaDevices.getUserMedia) {
             results.push('❌ getUserMedia method missing')
-            debugInfo.push('Available methods:', Object.getOwnPropertyNames(navigator.mediaDevices))
+            debugInfo.push('Available methods: ' + Object.getOwnPropertyNames(navigator.mediaDevices).join(','))
           } else {
             results.push('✅ getUserMedia method available')
           }

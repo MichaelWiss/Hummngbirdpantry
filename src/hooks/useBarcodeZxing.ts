@@ -108,6 +108,25 @@ export const useBarcodeZxing = (onDetected?: (barcode: Barcode, result: Result) 
         deviceId = pickBestDeviceId(devices)
       }
 
+      let initialized = false
+      const markInitialized = () => {
+        if (!initialized) {
+          initialized = true
+          setIsInitializing(false)
+          setIsActive(true)
+        }
+      }
+      // canplay indicates the video element has enough data to begin playing
+      const canPlayHandler = () => { if ((import.meta as any).env?.DEV) console.debug('[useBarcodeZxing] video canplay'); markInitialized() }
+      videoEl.addEventListener('canplay', canPlayHandler, { once: true })
+      // Safety timeout if canplay never fires (some Safari cases)
+  const initTimeout = setTimeout(() => {
+        if (!initialized) {
+          if ((import.meta as any).env?.DEV) console.debug('[useBarcodeZxing] init timeout fallback')
+          markInitialized()
+        }
+      }, 2500)
+
   await reader.decodeFromVideoDevice(deviceId, videoEl, (result, err) => {
         if (result) {
           const text = result.getText() as Barcode
@@ -117,9 +136,17 @@ export const useBarcodeZxing = (onDetected?: (barcode: Barcode, result: Result) 
             // Auto stop single shot
             stop()
           }
-        } else if (err && !(err instanceof NotFoundException)) {
-          // Non "not found" errors
-            onDecodeError?.(err)
+        } else if (err) {
+          // Ignore expected transient cases
+          if (err instanceof NotFoundException) {
+            return
+          }
+          // Some browsers throw IndexSizeError during early canvas read while dimensions 0
+          if ((err as any)?.name === 'IndexSizeError') {
+            if ((import.meta as any).env?.DEV) console.debug('[useBarcodeZxing] transient IndexSizeError ignored')
+            return
+          }
+          onDecodeError?.(err)
         }
       })
 
@@ -128,8 +155,9 @@ export const useBarcodeZxing = (onDetected?: (barcode: Barcode, result: Result) 
         try { reader.reset() } catch {/* ignore */}
         return
       }
-      setIsInitializing(false)
-      setIsActive(true)
+  // If detection hasn't already set active state ensure we mark it
+  markInitialized()
+  try { clearTimeout(initTimeout) } catch {/* ignore */}
     } catch (e: any) {
       console.error('[useBarcodeZxing] start failed', e)
       setError(e?.message || 'Failed to start scanner')

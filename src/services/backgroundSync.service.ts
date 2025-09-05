@@ -2,10 +2,11 @@
 // Handles online/offline state management and background data synchronization
 
 import { BarcodeService } from './barcode.service'
+import { barcodeCache } from './barcodeCache.service'
 import type { BarcodeCacheConfig } from '@/types'
 
 class BackgroundSyncService {
-  private syncInterval: number | null = null
+  private syncInterval: ReturnType<typeof setInterval> | null = null
   private isOnline: boolean = navigator.onLine
   private config: BarcodeCacheConfig
   private pendingSyncs: Set<string> = new Set()
@@ -18,6 +19,14 @@ class BackgroundSyncService {
   // Initialize background sync
   async initialize(): Promise<void> {
     console.log('🔄 Initializing background sync service...')
+
+    // Wait for cache readiness (with timeout fallback) to avoid early 'Cache not initialized' noise
+    try {
+      if (!barcodeCache.isReady()) {
+        const abort = new Promise(res => setTimeout(res, 1500))
+        await Promise.race([barcodeCache.whenReady(), abort])
+      }
+    } catch {/* ignore */}
 
     if (this.config.enableBackgroundSync) {
       this.startPeriodicSync()
@@ -93,7 +102,7 @@ class BackgroundSyncService {
   private stopPeriodicSync(): void {
     if (this.syncInterval) {
       console.log('⏹️ Stopping periodic sync')
-      clearInterval(this.syncInterval)
+      clearInterval(this.syncInterval as any)
       this.syncInterval = null
     }
   }
@@ -108,6 +117,10 @@ class BackgroundSyncService {
     console.log('🔄 Starting full cache synchronization...')
 
     try {
+      if (!barcodeCache.isReady()) {
+        console.log('⚠️ Skipping full sync - cache not ready')
+        return
+      }
       const cachedBarcodes = await BarcodeService.getCachedBarcodes()
       console.log(`📊 Found ${cachedBarcodes.length} cached barcodes to sync`)
 

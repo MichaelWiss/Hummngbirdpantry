@@ -35,41 +35,84 @@ class BarcodeCacheService {
     hitRate: 0,
     avgLookupTime: 0
   }
+  private inMemory = false
+  private memoryStore: Map<Barcode, BarcodeCacheEntry> = new Map()
+  private initAttempted = false
+  private initFailed = false
+  private ready = false
+  private readyPromise: Promise<void> | null = null
+  private resolveReady: (() => void) | null = null
+
+  isInMemory() { return this.inMemory }
+  initializationFailed() { return this.initFailed }
+  isReady() { return this.ready }
+  getMode() { return this.inMemory ? 'memory' : 'indexeddb' }
+  whenReady(): Promise<void> { return this.ready ? Promise.resolve() : (this.readyPromise ||= new Promise(res => { this.resolveReady = res })) }
 
   // Initialize IndexedDB database
   async initialize(config?: Partial<BarcodeCacheConfig>): Promise<void> {
-    if (config) {
-      this.config = { ...DEFAULT_CONFIG, ...config }
+    if (this.initAttempted) return
+    this.initAttempted = true
+    if (config) this.config = { ...DEFAULT_CONFIG, ...config }
+
+    const secure = typeof window !== 'undefined' && window.isSecureContext
+    const idbAvailable = typeof indexedDB !== 'undefined'
+    if (!secure || !idbAvailable) {
+      this.inMemory = true
+      this.initFailed = true
+      this.ready = true; this.resolveReady?.()
+      if (!secure) {
+        console.warn('[barcodeCache] Insecure context detected: using in-memory cache (no HTTPS -> no IndexedDB).')
+      } else if (!idbAvailable) {
+        console.warn('[barcodeCache] indexedDB not available in this environment: using in-memory cache.')
+      }
+      return
     }
 
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION)
+  return new Promise((resolve) => {
+      let request: IDBOpenDBRequest
+      try {
+        request = indexedDB.open(DB_NAME, DB_VERSION)
+      } catch (e) {
+        this.inMemory = true
+        this.initFailed = true
+        this.ready = true; this.resolveReady?.()
+        console.warn('[barcodeCache] IndexedDB open failed (Security / browser restriction). Falling back to memory cache.')
+        resolve()
+        return
+      }
 
       request.onerror = () => {
-        console.error('❌ Failed to open barcode cache database')
-        reject(new Error('Failed to initialize barcode cache'))
+        if (!this.initFailed) console.error('❌ Failed to open barcode cache database')
+        this.inMemory = true
+        this.initFailed = true
+  this.ready = true; this.resolveReady?.()
+        resolve() // resolve to allow app continuation
       }
 
       request.onsuccess = () => {
         this.db = request.result
         console.log('✅ Barcode cache database initialized')
+  this.ready = true; this.resolveReady?.()
         resolve()
       }
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result
-
-        // Create cache store
-        if (!db.objectStoreNames.contains(CACHE_STORE)) {
-          const cacheStore = db.createObjectStore(CACHE_STORE, { keyPath: 'barcode' })
-          cacheStore.createIndex('lastAccessed', 'lastAccessed', { unique: false })
-          cacheStore.createIndex('timestamp', 'timestamp', { unique: false })
-          cacheStore.createIndex('source', 'source', { unique: false })
-        }
-
-        // Create stats store
-        if (!db.objectStoreNames.contains(STATS_STORE)) {
-          db.createObjectStore(STATS_STORE, { keyPath: 'id' })
+        try {
+          if (!db.objectStoreNames.contains(CACHE_STORE)) {
+            const cacheStore = db.createObjectStore(CACHE_STORE, { keyPath: 'barcode' })
+            cacheStore.createIndex('lastAccessed', 'lastAccessed', { unique: false })
+            cacheStore.createIndex('timestamp', 'timestamp', { unique: false })
+            cacheStore.createIndex('source', 'source', { unique: false })
+          }
+          if (!db.objectStoreNames.contains(STATS_STORE)) {
+            db.createObjectStore(STATS_STORE, { keyPath: 'id' })
+          }
+        } catch (e) {
+          console.warn('[barcodeCache] upgrade failed, switching to in-memory fallback:', e)
+          this.inMemory = true
+          this.initFailed = true
         }
       }
     })
@@ -81,9 +124,20 @@ class BarcodeCacheService {
     productData: Partial<PantryItem>,
     source: BarcodeCacheEntry['source'] = 'api'
   ): Promise<void> {
-    if (!this.db) {
-      throw new Error('Cache not initialized')
+    if (this.inMemory) {
+      const entry: BarcodeCacheEntry = {
+        barcode,
+        productData,
+        timestamp: new Date(),
+        lastAccessed: new Date(),
+        accessCount: 1,
+        source,
+        ttl: new Date(Date.now() + this.config.ttl)
+      }
+      this.memoryStore.set(barcode, entry)
+      return
     }
+    if (!this.db) throw new Error('Cache not initialized')
 
     const entry: BarcodeCacheEntry = {
       barcode,
@@ -116,9 +170,20 @@ class BarcodeCacheService {
 
   // Lookup barcode in cache
   async lookup(barcode: Barcode): Promise<CacheLookupResult> {
-    if (!this.db) {
-      throw new Error('Cache not initialized')
+    if (this.inMemory) {
+      const entry = this.memoryStore.get(barcode)
+      if (entry) {
+        if (entry.ttl && entry.ttl < new Date()) {
+          this.memoryStore.delete(barcode)
+          return { found: false, data: null, source: 'none', timestamp: new Date(), cached: false }
+        }
+        entry.lastAccessed = new Date()
+        entry.accessCount++
+        return { found: true, data: entry.productData, source: 'cache', timestamp: entry.timestamp, cached: true }
+      }
+      return { found: false, data: null, source: 'none', timestamp: new Date(), cached: false }
     }
+    if (!this.db) throw new Error('Cache not initialized')
 
     const startTime = performance.now()
 
@@ -190,9 +255,8 @@ class BarcodeCacheService {
 
   // Delete barcode from cache
   async delete(barcode: Barcode): Promise<void> {
-    if (!this.db) {
-      throw new Error('Cache not initialized')
-    }
+  if (this.inMemory) { this.memoryStore.delete(barcode); return }
+  if (!this.db) throw new Error('Cache not initialized')
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([CACHE_STORE], 'readwrite')
@@ -214,9 +278,8 @@ class BarcodeCacheService {
 
   // Clear entire cache
   async clear(): Promise<void> {
-    if (!this.db) {
-      throw new Error('Cache not initialized')
-    }
+  if (this.inMemory) { this.memoryStore.clear(); return }
+  if (!this.db) throw new Error('Cache not initialized')
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([CACHE_STORE], 'readwrite')
@@ -238,9 +301,15 @@ class BarcodeCacheService {
 
   // Get cache statistics
   async getStats(): Promise<BarcodeCacheStats> {
-    if (!this.db) {
-      throw new Error('Cache not initialized')
+    if (this.inMemory) {
+      this.cacheStats = {
+        ...this.cacheStats,
+        totalEntries: this.memoryStore.size,
+        cacheSize: Array.from(this.memoryStore.values()).reduce((acc, e) => acc + JSON.stringify(e).length, 0)
+      }
+      return this.cacheStats
     }
+    if (!this.db) throw new Error('Cache not initialized')
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([CACHE_STORE], 'readonly')
@@ -273,9 +342,10 @@ class BarcodeCacheService {
 
   // Get all cached barcodes
   async getAllBarcodes(): Promise<Barcode[]> {
-    if (!this.db) {
-      throw new Error('Cache not initialized')
+    if (this.inMemory) {
+      return Array.from(this.memoryStore.keys())
     }
+    if (!this.db) throw new Error('Cache not initialized')
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([CACHE_STORE], 'readonly')
@@ -296,9 +366,23 @@ class BarcodeCacheService {
 
   // Clean up expired entries and enforce max size
   async cleanup(): Promise<void> {
-    if (!this.db) {
-      throw new Error('Cache not initialized')
+    if (this.inMemory) {
+      // Simple TTL + size enforcement in memory
+      const now = new Date()
+      for (const [code, entry] of this.memoryStore.entries()) {
+        if (entry.ttl && entry.ttl < now) this.memoryStore.delete(code)
+      }
+      if (this.memoryStore.size > this.config.maxSize) {
+        const sorted = Array.from(this.memoryStore.values()).sort((a, b) => a.lastAccessed.getTime() - b.lastAccessed.getTime())
+        const overflow = this.memoryStore.size - this.config.maxSize
+        for (let i = 0; i < overflow; i++) {
+          const victim = sorted[i]
+          if (victim) this.memoryStore.delete(victim.barcode)
+        }
+      }
+      return
     }
+    if (!this.db) throw new Error('Cache not initialized')
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([CACHE_STORE], 'readwrite')
@@ -353,9 +437,11 @@ class BarcodeCacheService {
 
   // Check if barcode is cached
   async isCached(barcode: Barcode): Promise<boolean> {
-    if (!this.db) {
-      return false
+    if (this.inMemory) {
+      const e = this.memoryStore.get(barcode)
+      return !!(e && (!e.ttl || e.ttl >= new Date()))
     }
+    if (!this.db) return false
 
     return new Promise((resolve) => {
       const transaction = this.db!.transaction([CACHE_STORE], 'readonly')
@@ -377,9 +463,18 @@ class BarcodeCacheService {
 
   // Search cache by product name or brand
   async search(query: string): Promise<Array<{ barcode: Barcode; data: Partial<PantryItem> }>> {
-    if (!this.db) {
-      throw new Error('Cache not initialized')
+    if (this.inMemory) {
+      const results: Array<{ barcode: Barcode; data: Partial<PantryItem> }> = []
+      for (const [code, entry] of this.memoryStore.entries()) {
+        const name = entry.productData.name?.toLowerCase() || ''
+        const brand = entry.productData.brand?.toLowerCase() || ''
+        if (name.includes(query.toLowerCase()) || brand.includes(query.toLowerCase())) {
+          results.push({ barcode: code, data: entry.productData })
+        }
+      }
+      return results
     }
+    if (!this.db) throw new Error('Cache not initialized')
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([CACHE_STORE], 'readonly')
@@ -431,9 +526,10 @@ class BarcodeCacheService {
 
   // Export cache data (for backup/sync)
   async export(): Promise<BarcodeCacheEntry[]> {
-    if (!this.db) {
-      throw new Error('Cache not initialized')
+    if (this.inMemory) {
+      return Array.from(this.memoryStore.values())
     }
+    if (!this.db) throw new Error('Cache not initialized')
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([CACHE_STORE], 'readonly')
@@ -454,9 +550,11 @@ class BarcodeCacheService {
 
   // Import cache data (for restore/sync)
   async import(entries: BarcodeCacheEntry[]): Promise<void> {
-    if (!this.db) {
-      throw new Error('Cache not initialized')
+    if (this.inMemory) {
+      entries.forEach(e => this.memoryStore.set(e.barcode, e))
+      return
     }
+    if (!this.db) throw new Error('Cache not initialized')
 
     return new Promise((resolve) => {
       const transaction = this.db!.transaction([CACHE_STORE], 'readwrite')

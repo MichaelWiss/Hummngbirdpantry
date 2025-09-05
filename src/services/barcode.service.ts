@@ -49,13 +49,13 @@ const BARCODE_DATABASE: Record<string, Partial<PantryItem>> = {
   '345678901234': {
     name: 'Whole Wheat Bread',
     category: 'bakery',
-    unit: 'loaves',
+    unit: 'pieces',
     brand: 'Artisan Bakery'
   },
   '345678901235': {
     name: 'Sourdough Bread',
     category: 'bakery',
-    unit: 'loaves',
+    unit: 'pieces',
     brand: 'Artisan Bakery'
   },
 
@@ -91,7 +91,7 @@ const BARCODE_DATABASE: Record<string, Partial<PantryItem>> = {
   '678901234567': {
     name: 'Dark Chocolate',
     category: 'snacks',
-    unit: 'bars',
+    unit: 'pieces',
     brand: 'Ghirardelli'
   },
   '678901234568': {
@@ -111,7 +111,7 @@ export class BarcodeService {
       // Step 1: Check cache first (instant results)
       console.log(`🔍 Looking up barcode ${barcode}...`)
 
-      if (await isBarcodeCached(barcode)) {
+  if (!barcodeCache.initializationFailed() && await isBarcodeCached(barcode)) {
         const cacheResult = await lookupCachedBarcode(barcode)
 
         if (cacheResult.found && cacheResult.data) {
@@ -131,11 +131,13 @@ export class BarcodeService {
 
       if (product) {
         // Step 3: Cache successful lookup for future use
-        try {
-          await cacheBarcode(barcode, product, 'mock')
-          console.log(`💾 Cached barcode ${barcode} from mock database`)
-        } catch (cacheError) {
-          console.warn('⚠️ Failed to cache barcode:', cacheError)
+        if (!barcodeCache.isInMemory() || !barcodeCache.initializationFailed()) {
+          try {
+            await cacheBarcode(barcode, product, 'mock')
+            console.log(`💾 Cached barcode ${barcode} from mock database`)
+          } catch (cacheError) {
+            console.warn('⚠️ Failed to cache barcode:', cacheError)
+          }
         }
 
         const lookupTime = performance.now() - startTime
@@ -333,18 +335,21 @@ export class BarcodeService {
 
   // Initialize cache system
   static async initializeCache(): Promise<void> {
+    if (barcodeCache.isReady()) return
     try {
       await barcodeCache.initialize()
+      await barcodeCache.whenReady()
       console.log('🚀 Barcode cache system initialized')
     } catch (error) {
       console.error('❌ Failed to initialize barcode cache:', error)
-      throw error
+      // don't rethrow; allow app to continue with in-memory fallback
     }
   }
 
   // Get cache statistics
   static async getCacheStats() {
     try {
+  if (!barcodeCache.isReady()) return null
       return await barcodeCache.getStats()
     } catch (error) {
       console.error('❌ Failed to get cache stats:', error)
@@ -355,6 +360,7 @@ export class BarcodeService {
   // Check if barcode is cached
   static async isBarcodeCached(barcode: Barcode): Promise<boolean> {
     try {
+  if (!barcodeCache.isReady()) return false
       return await barcodeCache.isCached(barcode)
     } catch (error) {
       console.warn('⚠️ Cache check failed:', error)
