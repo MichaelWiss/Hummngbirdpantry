@@ -70,7 +70,9 @@
     "prepare": "husky install",
     "pre-commit": "lint-staged",
     "clean": "rm -rf dist node_modules/.vite",
-    "analyze": "vite build --mode analyze"
+    "analyze": "vite build --mode analyze",
+    "secrets:scan": "detect-secrets scan > .secrets.new && detect-secrets audit .secrets.new",
+    "secrets:audit": "detect-secrets audit .secrets.baseline"
   },
   "browserslist": {
     "production": [

@@ -3,7 +3,12 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library'
-import { X, Scan, Camera, AlertCircle } from 'lucide-react'
+import { X, Scan, Camera } from 'lucide-react'
+import CameraViewport from './ui/CameraViewport'
+import ScannerOverlay from './ui/ScannerOverlay'
+import InsecureContextBanner from './ui/InsecureContextBanner'
+import ReadyPanel from './ui/ReadyPanel'
+import PermissionPanel from './ui/PermissionPanel'
 import type { Barcode } from '@/types'
 
 // Add PermissionName type for navigator.permissions.query
@@ -26,6 +31,8 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const [isInitializing, setIsInitializing] = useState(false)
   const [codeReader] = useState(() => new BrowserMultiFormatReader())
   const [permissionInstructions, setPermissionInstructions] = useState('')
+  const [needsSecureContext, setNeedsSecureContext] = useState(false)
+  const [userGestureRequested, setUserGestureRequested] = useState(false)
 
   // Check current camera permission status
   const checkCameraPermission = async () => {
@@ -42,6 +49,12 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
   // Initialize permission check on mount
   useEffect(() => {
+    // Insecure context guard (non-localhost, non-HTTPS)
+    const insecure = !window.isSecureContext && !['localhost', '127.0.0.1', '::1'].includes(location.hostname)
+    if (insecure) {
+      setNeedsSecureContext(true)
+    }
+
     checkCameraPermission().then(state => {
       if (state === 'denied') {
         setHasPermission(false)
@@ -63,6 +76,19 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
       if (!isSecure) {
         console.warn('⚠️ Camera access works best with HTTPS. For production, ensure HTTPS is enabled.')
+      }
+
+      // Explicit Safari/iOS insecure-context guard (prevents misleading MEDIA_DEVICES_NOT_SUPPORTED)
+      const ua = navigator.userAgent.toLowerCase()
+      const isSafari = ua.includes('safari') && !ua.includes('chrome')
+      const isLocalhost = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
+      if (isSafari && !window.isSecureContext && !isLocalhost) {
+        console.error('🧭 Safari/iOS insecure HTTP context blocks MediaDevices API.')
+        console.info('➡️ Fix: Run dev server with HTTPS (VITE_USE_HTTPS=1) or access via localhost. Example: https://' + location.hostname + ':' + location.port)
+        setHasPermission(null)
+        onError('iOS Safari blocks camera on HTTP. Use HTTPS (export VITE_USE_HTTPS=1; npm run dev) and open https://' + location.hostname + ':' + location.port + ' or use localhost.')
+        setIsInitializing(false)
+        return null
       }
 
       // Check camera API availability with better error handling
@@ -217,6 +243,8 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
   // Start scanning with comprehensive checks
   const startScanning = async () => {
+    if (needsSecureContext) return
+    // We allow calling before permission is granted; permission request will run.
     if (!videoRef.current) return
 
     try {
@@ -235,30 +263,26 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
         return
       }
 
-      // Select the best available camera for barcode scanning
-      let selectedDeviceId: string | undefined
-
-      if (cameras.length > 0) {
-        // Prefer back camera on mobile, front camera on desktop
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-        const backCamera = cameras.find(camera => camera.label.toLowerCase().includes('back') || camera.label.toLowerCase().includes('rear'))
-        const frontCamera = cameras.find(camera => camera.label.toLowerCase().includes('front') || camera.label.toLowerCase().includes('face'))
-
-        if (isMobile && backCamera) {
-          selectedDeviceId = backCamera.deviceId
-          console.log('📷 Using back camera for barcode scanning')
-        } else if (!isMobile && frontCamera) {
-          selectedDeviceId = frontCamera.deviceId
-          console.log('📷 Using front camera for barcode scanning')
-        } else {
-          selectedDeviceId = cameras[0].deviceId
-          console.log('📷 Using first available camera')
+      // Enumerate devices to pick a camera (non-fatal if it fails)
+      let selectedDeviceId: string | null = null
+      try {
+        if (navigator.mediaDevices?.enumerateDevices) {
+          const devices = await navigator.mediaDevices.enumerateDevices()
+          const videos = devices.filter(d => d.kind === 'videoinput')
+          if (videos.length) {
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+            const back = videos.find(d => /back|rear/i.test(d.label))
+            const front = videos.find(d => /front|face/i.test(d.label))
+            if (isMobile && back) selectedDeviceId = back.deviceId
+            else if (!isMobile && front) selectedDeviceId = front.deviceId
+            else if (videos[0]) selectedDeviceId = videos[0].deviceId
+          }
         }
-      }
+      } catch {/* ignore */}
 
       // Configure ZXing reader for optimal performance
       await codeReader.decodeFromVideoDevice(
-        selectedDeviceId, // Use selected camera or default
+        selectedDeviceId,
         videoRef.current,
         (result, error) => {
           if (result) {
@@ -323,10 +347,8 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
   // Auto-start scanning when permissions are granted
   useEffect(() => {
-    if (hasPermission === true && !isScanning && !isInitializing) {
-      startScanning()
-    }
-  }, [hasPermission, isScanning, isInitializing, startScanning])
+    // Auto-start removed: require explicit user action to avoid silent permission suppression
+  }, [])
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
@@ -352,147 +374,34 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
         {/* Camera View Container */}
         <div className="relative aspect-square bg-neutral-900">
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            playsInline
-            muted
-            autoPlay
-          />
-
-          {/* Scanning overlay */}
-          {isScanning && (
-            <div className="absolute inset-0">
-              {/* Scanning frame */}
-              <div className="absolute inset-8 border-2 border-primary-500 rounded-lg">
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                  <div className="w-48 h-32 border-2 border-white rounded-lg opacity-50"></div>
-                </div>
-              </div>
-
-              {/* Scanning animation */}
-              <div className="absolute inset-8 border-2 border-transparent rounded-lg">
-                <div className="absolute top-0 left-0 w-full h-1 bg-primary-500 animate-pulse rounded-t-lg"></div>
-              </div>
-
-              {/* Status indicator */}
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-                <div className="bg-primary-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg">
-                  {isInitializing ? 'Initializing...' : 'Scanning...'}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Permission states */}
+          <CameraViewport videoRef={videoRef} />
+          <ScannerOverlay isScanning={isScanning} isInitializing={isInitializing} />
           {hasPermission === false && (
-            <div className="absolute inset-0 flex items-center justify-center p-8">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AlertCircle className="w-8 h-8 text-red-600" />
-                </div>
-                <h4 className="text-xl font-semibold text-neutral-900 mb-2">
-                  Camera Access Required
-                </h4>
-                <p className="text-neutral-600 mb-4 max-w-xs">
-                  Camera access is needed to scan barcodes. Please follow these steps:
-                </p>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 max-w-xs">
-                  <p className="text-blue-800 text-sm font-medium">
-                    {permissionInstructions || getBrowserInstructions()}
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <button
-                    onClick={requestCameraPermission}
-                    className="w-full bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
-                  >
-                    <Camera size={18} />
-                    <span>Try Again</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Refresh permission status
-                      checkCameraPermission().then(state => {
-                        if (state === 'granted') {
-                          setHasPermission(true)
-                        }
-                      })
-                    }}
-                    className="w-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 px-4 py-3 rounded-lg font-medium transition-colors"
-                  >
-                    Check Permission Status
-                  </button>
-                  <button
-                    onClick={onClose}
-                    className="w-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 px-4 py-3 rounded-lg font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
+            <PermissionPanel
+              instructions={permissionInstructions || getBrowserInstructions()}
+              onRequest={requestCameraPermission}
+              onClose={onClose}
+              onRefresh={() => {
+                checkCameraPermission().then(state => { if (state === 'granted') setHasPermission(true) })
+              }}
+            />
           )}
-
-          {/* Initial state - ready to scan */}
-          {!isScanning && hasPermission === true && !isInitializing && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Scan className="w-10 h-10 text-primary-600" />
-                </div>
-                <h4 className="text-lg font-semibold text-neutral-900 mb-2">
-                  Ready to Scan
-                </h4>
-                <p className="text-neutral-600 mb-6 max-w-xs">
-                  Point your camera at a barcode to get started
-                </p>
-                <button
-                  onClick={startScanning}
-                  className="bg-primary-500 hover:bg-primary-600 text-white px-8 py-4 rounded-full font-medium text-lg shadow-lg transition-all hover:shadow-xl transform hover:scale-105"
-                >
-                  Start Scanning
-                </button>
-              </div>
-            </div>
+          {needsSecureContext && <InsecureContextBanner onDismiss={() => setNeedsSecureContext(false)} />}
+          {!needsSecureContext && !isScanning && hasPermission !== false && !isInitializing && (
+            <ReadyPanel
+              hasPermission={hasPermission}
+              onStart={() => { setUserGestureRequested(true); startScanning() }}
+            />
           )}
-
-          {/* Initializing state */}
-          {isInitializing && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <div className="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
-                </div>
-                <h4 className="text-lg font-semibold text-neutral-900 mb-2">
-                  Setting up camera...
-                </h4>
-                <p className="text-neutral-600">
-                  Please wait while we prepare the scanner
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Camera unavailable */}
-          {hasPermission === null && !isInitializing && (
+          {hasPermission === null && !isInitializing && userGestureRequested && !needsSecureContext && (
             <div className="absolute inset-0 flex items-center justify-center p-8">
               <div className="text-center">
                 <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Camera className="w-8 h-8 text-neutral-600" />
                 </div>
-                <h4 className="text-xl font-semibold text-neutral-900 mb-2">
-                  Camera Required
-                </h4>
-                <p className="text-neutral-600 mb-6 max-w-xs">
-                  Barcode scanning requires camera access. Please ensure your device has a camera.
-                </p>
-                <button
-                  onClick={requestCameraPermission}
-                  className="w-full bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-                >
-                  Try Again
-                </button>
+                <h4 className="text-xl font-semibold text-neutral-900 mb-2">Camera Required</h4>
+                <p className="text-neutral-600 mb-6 max-w-xs">Barcode scanning requires camera access. Please ensure your device has a camera.</p>
+                <button onClick={requestCameraPermission} className="w-full bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg font-medium transition-colors">Try Again</button>
               </div>
             </div>
           )}
@@ -578,23 +487,7 @@ const testSafariCamera = async () => {
 
       // Try to polyfill navigator.mediaDevices for older Safari versions
       console.log('🔄 Attempting to polyfill MediaDevices API...')
-      try {
-        if (!navigator.mediaDevices && navigator.webkitGetUserMedia) {
-          console.log('   Found webkitGetUserMedia - creating polyfill...')
-          navigator.mediaDevices = {
-            getUserMedia: function(constraints) {
-              return new Promise(function(resolve, reject) {
-                navigator.webkitGetUserMedia(constraints, resolve, reject);
-              });
-            }
-          } as any;
-          console.log('✅ Polyfill created! Retrying test...')
-          // Retry the test
-          return testSafariCamera();
-        }
-      } catch (polyfillError) {
-        console.log('❌ Polyfill failed:', polyfillError)
-      }
+  // Legacy webkit polyfill removed (modern secure-context requirement supersedes)
 
       console.log('')
       console.log('🚨 FINAL SOLUTION: Use Chrome on iPhone')
@@ -903,10 +796,7 @@ if (typeof window !== 'undefined') {
       }
     } catch (error) {
       console.log(`🔐 Permission check failed: ${error}`)
-      if (isFirefox) {
-        console.log(`🦊 Firefox permission check failed - this is common`)
-        console.log(`   Try: about:config -> media.navigator.permission.disabled -> false`)
-      }
+  // Firefox specific note removed to avoid forward reference
     }
 
     // Check user agent

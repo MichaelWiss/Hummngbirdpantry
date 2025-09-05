@@ -1,1 +1,30 @@
 node_modules
+
+# Local environment / secrets
+.env*
+!.env.example
+
+# Local TLS certs (do NOT commit real keys)
+*.pem
+cert.pem
+key.pem
+*.key
+*.crt
+*.pfx
+
+# MacOS
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+dist
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json

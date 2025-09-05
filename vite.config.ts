@@ -1,4 +1,6 @@
 import { defineConfig } from 'vite'
+import fs from 'fs'
+import path from 'path'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import { visualizer } from 'rollup-plugin-visualizer'
@@ -8,12 +10,7 @@ export default defineConfig(({ mode }) => ({
   // React plugin with fast refresh for development
   plugins: [
     // React fast refresh for hot module replacement
-    react({
-      // Enable React Fast Refresh for better development experience
-      fastRefresh: true,
-      // Use SWC for faster compilation (optional)
-      jsxRuntime: 'automatic'
-    }),
+  react({ jsxRuntime: 'automatic' }),
 
     // Bundle analyzer for production builds (only in analyze mode)
     mode === 'analyze' && visualizer({
@@ -54,8 +51,31 @@ export default defineConfig(({ mode }) => ({
     // Host configuration for mobile testing - bind to all interfaces
     host: '0.0.0.0',
 
-    // HTTPS disabled - use Chrome instead for camera access
-    https: false,
+    // Optional HTTPS (required for iOS Safari camera when not localhost)
+    // Activate by running: VITE_USE_HTTPS=1 npm run dev (expects cert.pem/key.pem in project root)
+    https: ((): any => {
+      if (process.env.VITE_USE_HTTPS === '1') {
+        const certPath = process.env.VITE_HTTPS_CERT_PATH
+          ? path.resolve(process.cwd(), process.env.VITE_HTTPS_CERT_PATH)
+          : path.resolve(__dirname, 'cert.pem')
+        const keyPath = process.env.VITE_HTTPS_KEY_PATH
+          ? path.resolve(process.cwd(), process.env.VITE_HTTPS_KEY_PATH)
+          : path.resolve(__dirname, 'key.pem')
+
+        const certExists = fs.existsSync(certPath)
+        const keyExists = fs.existsSync(keyPath)
+
+        if (certExists && keyExists) {
+          console.log(`🔐 Using HTTPS dev cert: ${certPath}`)
+          return { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) }
+        } else {
+          console.warn('⚠️ HTTPS requested but cert/key not found. Falling back to HTTP.')
+          if (!certExists) console.warn(`   Missing cert file: ${certPath}`)
+          if (!keyExists) console.warn(`   Missing key file:  ${keyPath}`)
+        }
+      }
+      return undefined
+    })(),
 
     // CORS configuration for external API development
     cors: true,
