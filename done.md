@@ -35,7 +35,6 @@
   - **Benefit**: Simplifies orchestrator testing & state isolation
 
 ### 2025-09-05 - Barcode Scanner Stability Rollback & Fix
-- [x] **Restored reliable camera feed across browsers (Chrome primary; Safari overlay artifact resolved)**
   - **Problem**: Refactor introduced multi-phase initialization (preflight getUserMedia + ZXing start + restarts) causing black/ flashing video and duplicate overlays; Safari/Firefox showed live track without rendered frames (0×0 dimensions) and IndexSizeError spam.
   - **Root Causes**:
     - Early permission stream stopped before ZXing attached its own → race leaving video element without srcObject.
@@ -51,6 +50,9 @@
   - **Key Decisions**: Prefer stability-first baseline; postpone advanced features until after verified multi-browser feed.
   - **Testing**: Verified live feed and decoding on Chrome; Safari double-border removed after overlay simplification; awaiting extended Firefox/Safari decode verification.
   - **Next Steps**: (Deferred) Single-shot mode toggle, device switch UI, decode throttling, re-introduction of diagnostics behind a flag.
+  - **Observation (Multi-Phase Init Rationale & Deprecation)**:
+    *Original Intent*: (a) Fast permission priming; (b) obtain labeled devices for back-camera preference; (c) warm camera to reduce first frame latency; (d) recover stalled attach via restart; (e) smooth UX with activation fallback; (f) isolate errors per phase.
+    *Why Removed*: Added a race by stopping the preflight stream before ZXing bound its own; restart/fallback timers reset reader mid-attach; complexity obscured true failure (0×0 dimensions) and produced duplicate overlay illusion. Net negative for reliability—single deterministic pipeline chosen instead.
 
 
 
