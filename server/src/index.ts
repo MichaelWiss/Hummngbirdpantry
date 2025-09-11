@@ -6,9 +6,16 @@ import { products } from './routes/products'
 
 const app = express()
 const PORT = Number(process.env.PORT || 4000)
-const ORIGIN = process.env.CORS_ORIGIN || '*'
+const rawOrigin = process.env.CORS_ORIGIN || '*'
+const origin =
+  rawOrigin === '*'
+    ? '*'
+    : rawOrigin
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
 
-app.use(cors({ origin: ORIGIN }))
+app.use(cors({ origin }))
 app.use(express.json())
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
