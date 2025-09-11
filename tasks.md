@@ -1,4 +1,279 @@
+# HummingbirdPantry – Development Tasks (Granular)
+
+## Current Sprint: Barcode → Save (Granular Milestones)
+
+### Scanner Reliability & iOS Secure Context
+- [ ] iOS secure context: device‑trusted HTTPS for on‑device testing (or `localhost`)
+- [ ] In‑app capability gating banner (iOS WebKit limits on HTTP/LAN IP explained)
+- [ ] Diagnostic action: show secure‑context, UA, mediaDevices and IndexedDB status
+- [ ] Constraint fallback path for `OverconstrainedError` (retry 640×480 @ 15fps)
+- [ ] Ensure all tracks stop on modal close/unmount (no camera leak)
+- [ ] Single‑shot mode toggle (auto‑stop on first stable decode)
+
+### Data Model & Storage (Local‑first)
+- [ ] Define `Product` type (id, barcode, name, brand, category, quantity, unit, createdAt, updatedAt, image?)
+- [ ] IndexedDB: `products` store (key: `id`, index: `barcode` unique)
+- [ ] IndexedDB: `offlineQueue` store for failed/queued sync (optional)
+- [ ] Service: `product.service.ts` (CRUD + getByBarcode + upsert + queue)
+
+### Barcode Scan Flow (MVP)
+- [ ] Open scanner modal UI (video container, overlay, controls, status)
+- [ ] Start ZXing `decodeFromVideoElementContinuously` after camera is ready
+- [ ] Debounce duplicates; accept first stable decode within 500ms window
+- [ ] Validate barcode (digits‑only for UPC/EAN, length guardrails, checksum)
+- [ ] Cache check (IndexedDB) by barcode → hydrate if hit
+- [ ] Lookup via Open Food Facts on miss → map response → internal `Product`
+- [ ] Manual form fallback if providers return no result
+
+### Save & Sync
+- [ ] Save to IndexedDB; optimistic update to pantry store (increment quantity if exists)
+- [ ] POST `/api/products` when online; merge server response into cache
+- [ ] On failure/offline: enqueue to `offlineQueue`; background sync job
+
+### UX & Accessibility
+- [ ] Clear permission/insecure‑context banners with next steps
+- [ ] Scan frame overlay + animated scan line; large, reachable controls
+- [ ] Toasts for decoded, saved, lookup failed, queued for sync
+- [ ] ARIA live region for status; focus trap; return focus to trigger on close
+
+### QA & Acceptance
+- [ ] iOS device (secure context): camera + IndexedDB both functional
+- [ ] Decode common UPC/EAN within ~2s in good light
+- [ ] No camera track active after closing scanner modal
+- [ ] Product appears in pantry; survives reload (persisted)
+- [ ] Manual entry path works when lookup fails
+
+
+## Phase 0: Documentation & Planning
+
+### Requirements & Roadmap
+- [ ] Update requirements with iOS secure‑context rule (WebKit engine on all iOS browsers)
+- [ ] Define supported barcode symbologies (UPC‑A, EAN‑13, EAN‑8; others as stretch)
+- [ ] Define product fields and validation rules
+- [ ] Finalize phased roadmap with granular acceptance criteria per phase
+
+### Security & Key Hygiene
+- [ ] Local HTTPS guide: generating certs, trusting on device, pitfalls on Safari
+- [ ] Secret scanning tooling and process (documented)
+- [ ] Add “do not commit keys/certs” policies and `.gitignore` entries
+
+
+## Phase 1: Foundation & Core Setup
+
+### Tooling & Quality
+- [ ] ESLint + Prettier (CJS config if needed), strict TypeScript
+- [ ] Vitest + RTL for unit/integration tests; Playwright for E2E
+- [ ] Path aliases and tsconfig paths; CI lint/test scripts
+
+### Build & Dev Server
+- [ ] Vite config hardened (host binding, headers, HTTPS toggles via env)
+- [ ] Local HTTPS env vars (cert/key paths) and graceful fallback
+- [ ] Document “never self‑sign for production”; device trust flow only for dev
+
+### Styling & UI System
+- [ ] Tailwind configured with design tokens; CSS Modules allowed for scoped styles
+- [ ] Base layout components (Header, Nav, Card, Button) skeletons
+
+
+## Phase 2: Core Pantry Management
+
+### State & Models
+- [ ] Pantry store (items, filters, search, optimistic updates)
+- [ ] Types: `PantryItem`, `ItemCategory`, `MeasurementUnit`
+- [ ] Persistence middleware (localStorage) for settings
+
+### Core Screens
+- [ ] Pantry list with filters/search/sorting
+- [ ] Add/Edit item modal (validation, units, categories)
+- [ ] Stats overview (counts, expiring soon, categories)
+
+### Barcode Scanning (BETA → GA)
+- [ ] Modal UX (shell only): video container, overlay, controls, instructions
+- [ ] Camera request + binding: `getUserMedia` → `video.srcObject`, `onloadedmetadata`
+- [ ] ZXing integration: `decodeFromVideoElementContinuously`
+- [ ] Debounce, validation (length + checksum), and success flow
+- [ ] IndexedDB cache lookup; provider lookup fallback; manual entry fallback
+- [ ] Save to DB; optimistic UI; cleanup tracks; toasts & announcements
+- [ ] iOS secure‑context gating (banner + docs link)
+- [ ] GA criteria met (see QA & Acceptance)
+
+
+## Phase 2.5: Voice & Photo Features
+
+### Voice (Web Speech API)
+- [ ] Voice input control with start/stop and visual feedback
+- [ ] Dictation pipeline to add items; error messages per error type
+- [ ] Mocks for testing voice flows in CI
+
+### Photo Capture & OCR (MVP)
+- [ ] Photo capture view (separate from scanner); resource cleanup
+- [ ] OCR pipeline (client‑side where possible); extract name/brand/qty
+- [ ] Manual correction form; save to DB
+
+
+## Phase 3: Shopping & Chat Systems
+
+### Shopping Lists
+- [ ] Generate list from low stock/expiring soon
+- [ ] Aisles/sections ordering; drag‑and‑drop reordering
+- [ ] Mark purchased; archive history
+
+### Chat Assistant (MVP)
+- [ ] Chat UI (messages, input, quick actions)
+- [ ] Commands: add item, create list, find recipes (mocked at first)
+- [ ] Error/resilience UX
+
+
+## Phase 4: UI/UX & PWA
+
+### Mobile‑First UX
+- [ ] One‑column layouts on mobile; large touch targets
+- [ ] Typography, spacing, contrast tuned for iPhone
+- [ ] Animation/transition micro‑interactions (lightweight)
+
+### PWA & Offline
+- [ ] Manifest with icons, theme, orientation; install prompt UX
+- [ ] Service worker: cache strategy for app shell; versioning
+- [ ] Offline banner + re‑sync flow for queued actions
+
+### iOS Secure‑Context Enablement
+- [ ] Device‑trusted HTTPS guide and checklist (dev only)
+- [ ] App copy explaining iOS WebKit limitations on HTTP/LAN IP
+- [ ] Verification checklist (camera + IndexedDB work on device)
+
+
+## Phase 5: Data Management & APIs
+
+### IndexedDB & Services
+- [ ] DB versioning + migrations; error handling for blocked/upgrade
+- [ ] `products` store APIs (getById, getByBarcode, list, put, delete)
+- [ ] `offlineQueue` APIs and background processing
+
+### Server APIs (if/when available)
+- [ ] `/api/products` CRUD; schema validation
+- [ ] Barcode lookup proxy with caching/budget limits
+- [ ] Error taxonomy and retry/backoff policy
+
+
+## Phase 6: Testing & Quality Assurance
+
+### Unit & Integration
+- [ ] Hooks: pantry, scanner, products services (85%+ coverage targets later)
+- [ ] Components: scanner modal, add item modal, pantry list
+- [ ] Storage: IndexedDB service with mocks
+
+### E2E (Playwright)
+- [ ] Happy path: scan → product → save → appears in pantry
+- [ ] Fallback path: scan fail → manual entry → save
+- [ ] Offline path: save queued → sync on reconnect
+
+### Cross‑Platform
+- [ ] iOS Safari device (secure context) acceptance
+- [ ] Desktop Chrome/Firefox parity checks
+
+
+## Phase 7: Performance & Optimization
+
+### App‑level
+- [ ] Code splitting/lazy load scanner and heavy views
+- [ ] Keep initial bundle under target budget (<200KB gz)
+- [ ] Measure and reduce layout shifts on mobile
+
+### Scanner‑specific
+- [ ] Decode latency budget (~2s in good light)
+- [ ] Constraint negotiation metrics (how often fallbacks are used)
+- [ ] Memory and track cleanup verified (no leaks across open/close cycles)
+
+
+## Phase 8: Documentation & Deployment
+
+### Docs
+- [ ] README: setup, HTTPS on device, known limitations, troubleshooting
+- [ ] Component READMEs for scanner and data services
+- [ ] Change log and migration notes for DB version bumps
+
+### Deployment
+- [ ] CI: lint, typecheck, tests, build
+- [ ] CD: artifact upload; environment config; secrets policy
+- [ ] Observability hooks (minimal): error reporting toggles
+
+
+## Risk Register (Live)
+- iOS WebKit secure‑context requirement blocks camera/IndexedDB on HTTP/LAN IP → Mitigate with device‑trusted HTTPS and clear banners.
+- Provider rate limits/coverage gaps for barcode lookup → Cache + manual entry fallback.
+- Camera constraints vary across devices → Robust fallback path and telemetry.
+
+
+## Definitions of Done (DoD)
+- Feature meets acceptance criteria, has tests, cleans up resources, and is documented.
+- No new ESLint/TypeScript errors; lints/tests pass in CI.
+- Mobile UX verified on iPhone; accessible announcements included.
+
+
+## Appendix: Recent Regression (2025‑09‑05) – Barcode Scanner
+
+### Symptoms
+- Black/flash video, 0×0 dimensions, `IndexSizeError`, duplicate overlay (Safari), inconsistent auto‑start.
+
+### Root Causes
+1) Preflight stream stopped before ZXing attach → race leaving video without `srcObject`.
+2) Restart timers resetting reader during attach window.
+3) Overlay duplication illusion from nested frames + strict/dev double mount.
+4) Decode attempted on 0×0 video → transient canvas read errors.
+
+### Resolutions
+- Single deterministic pipeline: getUserMedia → bind → wait `loadedmetadata` → continuous decode.
+- Remove restart/polling; simplify overlay to single layer; `pointer-events: none`.
+- Document causes; defer advanced features behind flags.
+
+### Deferred Enhancements
+- Single‑shot barcode mode, device switcher, diagnostics flag, extended fallback constraints.
 # HummingbirdPantry - Development Tasks
+
+## Current Sprint: Barcode → Save (Granular Milestones)
+
+### Scanner Reliability & iOS Secure Context
+- [ ] iOS secure context: device-trusted HTTPS for on-device testing
+- [ ] In-app capability gating banner (explain HTTP/LAN IP limits on iOS WebKit)
+- [ ] Diagnostic button: show secure-context, UA, mediaDevices status, IndexedDB status
+- [ ] Constraint negotiation fallback (min 640×480 @ 15fps) when OverconstrainedError
+- [ ] Stop all tracks on unmount / close to release camera reliably
+- [ ] Single-shot mode toggle (auto-stop on first decode)
+
+### Data Model & Storage (Local-first)
+- [ ] Define `Product` type (id, barcode, name, brand, category, quantity, unit, meta)
+- [ ] Create `products` object store in IndexedDB (by `id`, index by `barcode`)
+- [ ] Create `offlineQueue` store for pending server sync (optional)
+- [ ] Service: `product.service.ts` with CRUD + barcode lookup helpers
+
+### Barcode Scan Flow (MVP)
+- [ ] Open scanner modal, request camera, bind `video.srcObject`
+- [ ] Start ZXing `decodeFromVideoElementContinuously`
+- [ ] Debounce duplicate results; persist first stable decode only
+- [ ] Validate barcode (digits-only, length guardrails, checksum for EAN/UPC)
+- [ ] Local cache check (IndexedDB) by barcode
+- [ ] If cached, hydrate UI and offer quick-save
+- [ ] If miss, call lookup service(s); map result → `Product`
+- [ ] Fallback to manual form if no product found
+
+### Save & Sync
+- [ ] Save product to IndexedDB; update pantry store optimistically
+- [ ] If server available, POST to `/api/products`; upsert local on success
+- [ ] If offline/failure, enqueue to `offlineQueue` for background sync
+
+### UX & Accessibility
+- [ ] Clear permission/insecure-context messaging with next steps
+- [ ] Visual focus frame and scan hint; large close/done buttons
+- [ ] Toasts: decoded, saved, lookup failed, queued for sync
+- [ ] Screen-reader announcements for success/failure
+
+### QA & Acceptance
+- [ ] Works on iOS device under secure context (camera + IndexedDB)
+- [ ] Decodes common UPC/EAN codes within 2 seconds in good light
+- [ ] No camera resource leak after closing scanner
+- [ ] Product persisted locally and visible in pantry list
+- [ ] Graceful fallback to manual entry when lookup fails
+
 
 ## Phase 1: Foundation & Core Setup (2-3 weeks)
 
@@ -41,6 +316,11 @@
   - Improved mobile spacing and touch targets
 
 ### [ ] Voice & Camera Component Integration
+
+### [ ] iOS Secure-Context Enablement
+- Device-trusted HTTPS for on-device testing (iOS requires secure context or localhost)
+- In-app capability gating and iOS copy (Chrome on iOS uses WebKit)
+- Verify MediaDevices and IndexedDB on-device under secure context
 
 ## Phase 5: Data Management & APIs (2-3 weeks)
 

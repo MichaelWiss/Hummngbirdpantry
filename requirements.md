@@ -340,6 +340,15 @@ App (Context Provider + Theme Provider)
 - **Battery Impact**: Minimize camera/voice processing drain
 
 ### Business Impact
+
+## Core Requirement: Barcode → Product via Open Food Facts (OFF)
+- On successful barcode decode, the app MUST query a free external API to resolve product metadata.
+- Default provider: Open Food Facts (OFF). If barcode exists:
+  - Map OFF fields → internal: name, brand, category (best-effort mapping), optional image/nutrition.
+  - Upsert into local products DB and set quantity = 1 (increment if already present).
+- If not found:
+  - Open Add Item modal prefilled with `barcode` for manual entry.
+- Rationale: zero-cost, broad coverage, and rich data suitable for MVP.
 - **User Retention**: 70% monthly active user retention
 - **Feature Usage**: >60% of users use advanced features (voice, barcode)
 - **User Satisfaction**: >4.5 star app store rating

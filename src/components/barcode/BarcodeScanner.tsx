@@ -13,19 +13,19 @@ import type { Barcode } from '@/types'
 // Simplified baseline: direct getUserMedia + continuous decode; prior layered logic removed for stability.
 
 type PermissionName = 'camera' | 'microphone' | 'geolocation' | 'notifications'
-interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void }
+interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void; uiOnly?: boolean }
 
 // Global singleton tracker (dev-only) to prevent multiple lingering overlays
 let __HB_ACTIVE_SCANNER__: symbol | null = null
 
-const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose }) => {
+const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose, uiOnly = false }) => {
   const instanceId = React.useRef(Symbol('scanner'))
   const autoStartedRef = React.useRef(false)
   // Singleton mount guard: ensure only one scanner root exists (stronger: clear others BEFORE first paint)
   if (typeof document !== 'undefined') {
     if (__HB_ACTIVE_SCANNER__ && __HB_ACTIVE_SCANNER__ !== instanceId.current) {
       const nodes = document.querySelectorAll('[data-testid="barcode-scanner-modal"]')
-      nodes.forEach((n, idx) => { if (idx < nodes.length - 1) n.parentElement?.removeChild(n) })
+      nodes.forEach((n) => { n.parentElement?.removeChild(n) })
     }
     __HB_ACTIVE_SCANNER__ = instanceId.current
   }
@@ -41,6 +41,58 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
   const [isInitializing, setIsInitializing] = useState(false)
   const readerRef = useRef<BrowserMultiFormatReader | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const recentResultsRef = useRef<{ text: string; ts: number }[]>([])
+  const acceptedRef = useRef(false)
+
+  // --- UPC/EAN normalization and checksum validation helpers ---
+  const isDigitsOnly = (s: string) => /^\d+$/.test(s)
+  const digitAt = (code: string, index: number) => code.charCodeAt(index) - 48
+  const checksumEAN13 = (code: string) => {
+    if (code.length !== 13 || !isDigitsOnly(code)) return false
+    const check = digitAt(code, 12)
+    let sum = 0
+    for (let i = 0; i < 12; i++) {
+      const weight = (i % 2 === 0) ? 1 : 3 // positions 0..11
+      sum += digitAt(code, i) * weight
+    }
+    const calc = (10 - (sum % 10)) % 10
+    return calc === check
+  }
+  const checksumUPCA = (code: string) => {
+    if (code.length !== 12 || !isDigitsOnly(code)) return false
+    const check = digitAt(code, 11)
+    let sum = 0
+    for (let i = 0; i < 11; i++) {
+      const weight = (i % 2 === 0) ? 3 : 1 // UPC-A uses 3 for odd positions (0-based)
+      sum += digitAt(code, i) * weight
+    }
+    const calc = (10 - (sum % 10)) % 10
+    return calc === check
+  }
+  const checksumEAN8 = (code: string) => {
+    if (code.length !== 8 || !isDigitsOnly(code)) return false
+    const check = digitAt(code, 7)
+    let sum = 0
+    for (let i = 0; i < 7; i++) {
+      const weight = (i % 2 === 0) ? 3 : 1 // positions 0..6
+      sum += digitAt(code, i) * weight
+    }
+    const calc = (10 - (sum % 10)) % 10
+    return calc === check
+  }
+  const normalizeAndValidateBarcode = (raw: string): { normalized: string; valid: boolean } => {
+    const trimmed = raw.trim()
+    if (isDigitsOnly(trimmed)) {
+      // numeric-only symbologies (retain leading zeros)
+      if (trimmed.length === 13) return { normalized: trimmed, valid: checksumEAN13(trimmed) }
+      if (trimmed.length === 12) return { normalized: trimmed, valid: checksumUPCA(trimmed) }
+      if (trimmed.length === 8) return { normalized: trimmed, valid: checksumEAN8(trimmed) }
+      // other numeric lengths: pass through as-is
+      return { normalized: trimmed, valid: true }
+    }
+    // non-numeric (Code128/QR etc.): pass through
+    return { normalized: trimmed, valid: true }
+  }
   // (selectingRef removed; no longer needed in simplified flow)
   const [permissionInstructions, setPermissionInstructions] = useState('')
   const [needsSecureContext, setNeedsSecureContext] = useState(false)
@@ -71,6 +123,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
   }, [])
 
   const requestCameraPermission = async () => {
+    if (uiOnly) {
+      return null
+    }
     try {
       setIsInitializing(true)
       const isSecure = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname)
@@ -124,11 +179,38 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
   }
 
   const startScanning = useCallback(async () => {
+    if (uiOnly) return
     if (isScanning || isInitializing) return
     if (!videoRef.current) return
     setIsInitializing(true)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } })
+      const primaryConstraints: MediaStreamConstraints = {
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 },
+          frameRate: { ideal: 30, min: 15 }
+        }
+      }
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(primaryConstraints)
+      } catch (err: any) {
+        if (err?.name === 'OverconstrainedError') {
+          console.warn('[BarcodeScanner] OverconstrainedError: retrying 640x480@15')
+          const fallbackConstraints: MediaStreamConstraints = {
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              frameRate: { ideal: 15, max: 15 }
+            }
+          }
+          stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints)
+        } else {
+          throw err
+        }
+      }
       streamRef.current = stream
       videoRef.current.srcObject = stream
       await new Promise<void>(res => {
@@ -140,9 +222,32 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
       const reader = readerRef.current
       setIsScanning(true)
       setIsInitializing(false)
+      recentResultsRef.current = []
+      acceptedRef.current = false
       reader.decodeFromVideoElementContinuously(videoRef.current!, (result, err) => {
         if (result) {
-          onBarcodeDetected(result.getText() as Barcode)
+          if (acceptedRef.current) return
+          const text = result.getText()
+          const now = Date.now()
+          recentResultsRef.current = recentResultsRef.current
+            .filter(r => now - r.ts <= 600)
+            .concat({ text, ts: now })
+          const count = recentResultsRef.current.filter(r => r.text === text).length
+          if (count >= 2) {
+            acceptedRef.current = true
+            // normalize & validate common numeric symbologies (UPC/EAN)
+            const { normalized, valid } = normalizeAndValidateBarcode(text)
+            if (isDigitsOnly(normalized) && !valid) {
+              // invalid checksum; keep scanning and prompt user
+              acceptedRef.current = false
+              recentResultsRef.current = []
+              onError('Invalid barcode read (checksum failed). Hold steady and try again.')
+              return
+            }
+            // defer stopping to after callback to avoid hook order issues
+            try { onBarcodeDetected(normalized as Barcode) } catch {/* ignore */}
+            setTimeout(() => { try { stopScanning() } catch {/* ignore */} }, 0)
+          }
         } else if (err && !(err instanceof NotFoundException)) {
           if ((err as any)?.name === 'IndexSizeError') return
           onError((err as any)?.message || 'Decode error')
@@ -157,7 +262,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
         onError(`Camera error: ${e?.message || 'Unknown'}`)
       }
     }
-  }, [isScanning, isInitializing, onBarcodeDetected, onError])
+  }, [uiOnly, isScanning, isInitializing, onBarcodeDetected, onError])
 
   const stopScanning = useCallback(() => {
     setIsScanning(false)
@@ -180,13 +285,14 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
   // Auto-start if permission already granted (restores previous UX)
   useEffect(() => {
     if (!flagsRef.current.autoStartOnGrant) return
+    if (uiOnly) return
     if (autoStartedRef.current) return
     if (hasPermission === true) {
       autoStartedRef.current = true
       if (flagsRef.current.verboseDebug) console.debug('[BarcodeScanner] autoStartOnGrant (baseline)')
       startScanning()
     }
-  }, [hasPermission, startScanning])
+  }, [uiOnly, hasPermission, startScanning])
 
   // Release start guard when scanner becomes active or initialization ends
   // Start guard logic removed
@@ -219,7 +325,14 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
           )}
           {needsSecureContext && <InsecureContextBanner onDismiss={() => setNeedsSecureContext(false)} />}
           {!needsSecureContext && !isScanning && hasPermission !== false && !isInitializing && (
-            <ReadyPanel hasPermission={hasPermission} onStart={() => { setUserGestureRequested(true); startScanning() }} data-testid="ready-panel" />
+            <ReadyPanel
+              hasPermission={hasPermission}
+              onStart={() => {
+                setUserGestureRequested(true)
+                if (!uiOnly) startScanning()
+              }}
+              data-testid="ready-panel"
+            />
           )}
           {hasPermission === null && !isInitializing && !isScanning && userGestureRequested && !needsSecureContext && (
             <div className="absolute inset-0 flex items-center justify-center p-8" data-testid="no-permission-prompt">

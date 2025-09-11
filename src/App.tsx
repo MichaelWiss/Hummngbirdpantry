@@ -2,19 +2,31 @@
 // This component serves as the root of our React application
 
 import React from 'react'
-import { Package, ShoppingCart, BarChart3, Scan, Plus, Database } from 'lucide-react'
+import type { ItemCategory, MeasurementUnit, Barcode } from '@/types'
+import { Package, ShoppingCart, BarChart3, Scan, Plus } from 'lucide-react'
 
 // Import pantry components
 import PantryView from '@/components/pantry/PantryView'
+import CategoryList from '@/components/pantry/CategoryList'
+import CategoryItems from '@/components/pantry/CategoryItems'
 import BarcodeScanner from '@/components/barcode/BarcodeScanner'
 import AddItemModal from '@/components/pantry/AddItemModal'
-import CacheDemoPage from '@/components/cache/CacheDemoPage'
+// Removed demo page from navigation
 
 // Main App component - Simple One-Column Mobile Layout
 const App: React.FC = () => {
   const [showBarcodeScanner, setShowBarcodeScanner] = React.useState(false)
   const [showAddItemModal, setShowAddItemModal] = React.useState(false)
-  const [currentView, setCurrentView] = React.useState<'pantry' | 'demo'>('pantry')
+  const [currentView, setCurrentView] = React.useState<'pantry' | 'categories' | 'categoryItems'>('pantry')
+  const [activeCategory, setActiveCategory] = React.useState<ItemCategory | null>(null)
+  const [addItemInitialData, setAddItemInitialData] = React.useState<Partial<{
+    name: string
+    category: ItemCategory
+    quantity: number
+    unit: MeasurementUnit
+    barcode: Barcode | ''
+    notes: string
+  }> | undefined>(undefined)
 
   // Dev-only: filter a benign ZXing / video element warning that can appear once during
   // stream handoff ("Trying to play video that is already playing."). This prevents
@@ -77,7 +89,7 @@ const App: React.FC = () => {
       const isSafari = userAgent.includes('Safari') && !userAgent.includes('Chrome')
       const isFirefox = userAgent.includes('Firefox')
 
-      results.push(`🌐 Browser: ${isChrome ? 'Chrome' : isSafari ? 'Safari' : isFirefox ? 'Firefox' : 'Unknown'}`)
+      results.push(`🌐 Browser: ${isChrome ? 'Chrome (iOS uses WebKit)' : isSafari ? 'Safari' : isFirefox ? 'Firefox (iOS uses WebKit)' : 'Unknown'}`)
       results.push(`📱 User Agent: ${userAgent.substring(0, 50)}...`)
 
       debugInfo.push(`Full UA: ${userAgent}`)
@@ -97,10 +109,10 @@ const App: React.FC = () => {
 
           // Check if it's Safari blocking it
           if (isSafari) {
-            results.push('🎯 This is expected in Safari on HTTP')
+            results.push('🎯 iOS WebKit blocks camera on HTTP/LAN IP')
             debugInfo.push('Safari HTTP restriction detected')
           } else {
-            results.push('🎯 Unexpected - should be available in Chrome')
+            results.push('🎯 On iOS, Chrome uses WebKit; secure context required')
             debugInfo.push('navigator properties: ' + Object.getOwnPropertyNames(navigator).join(','))
           }
         } else {
@@ -186,20 +198,59 @@ const App: React.FC = () => {
 
       {/* One-Column Layout - Full Width on Mobile, Contained on Desktop */}
       <main className="w-full px-0 sm:px-4 sm:max-w-7xl sm:mx-auto lg:px-8 py-8">
-        {currentView === 'pantry' ? (
-          <PantryView />
-        ) : (
-          <CacheDemoPage />
+        {currentView === 'pantry' && <PantryView />}
+        {currentView === 'categories' && (
+          <CategoryList onSelect={(cat) => { setActiveCategory(cat); setCurrentView('categoryItems') }} />
         )}
+        {currentView === 'categoryItems' && activeCategory && (
+          <CategoryItems category={activeCategory} onBack={() => setCurrentView('categories')} />
+        )}
+        {/* demo view removed */}
       </main>
 
       {/* Modals */}
       {showBarcodeScanner && (
         <BarcodeScanner
           onBarcodeDetected={async (barcode) => {
-            console.log('Barcode scanned from main app:', barcode)
-            alert(`Barcode scanned: ${barcode}\n\nThis would normally auto-fill an add item form or quick-add the item.`)
-            setShowBarcodeScanner(false)
+            try {
+              const { getByBarcode, upsertProduct, incrementQuantity } = await import('@/services/product.service')
+              const { fetchProductByBarcode } = await import('@/services/openFoodFacts.service')
+              const current = await getByBarcode(barcode)
+              setShowBarcodeScanner(false)
+              if (current) {
+                try {
+                  await incrementQuantity(barcode, 1)
+                  // Optionally enqueue server sync
+                  if ((import.meta as any).env?.VITE_API_BASE_URL) {
+                    const { enqueue } = await import('@/services/offlineQueue.service')
+                    await enqueue({ method: 'POST', endpoint: '/api/products', payload: { ...current, quantity: current.quantity + 1 } })
+                  }
+                } catch (e) { console.warn('Local update failed (still usable):', e) }
+                console.log(`Updated quantity: ${current.name} (+1)`) 
+                return
+              }
+              const off = await fetchProductByBarcode(barcode)
+              if (off.found && off.data) {
+                const init = {
+                  name: off.data.name!,
+                  category: off.data.category as ItemCategory,
+                  quantity: 1,
+                  unit: 'pieces' as MeasurementUnit,
+                  barcode
+                }
+                setAddItemInitialData(init)
+                if ((import.meta as any).env?.VITE_API_BASE_URL) {
+                  const { enqueue } = await import('@/services/offlineQueue.service')
+                  await enqueue({ method: 'POST', endpoint: '/api/products', payload: init })
+                }
+                setShowAddItemModal(true)
+              } else {
+                setAddItemInitialData({ barcode })
+                setShowAddItemModal(true)
+              }
+            } catch (e) {
+              console.error('Post-scan handling failed:', e)
+            }
           }}
           onError={(error) => {
             console.error('Barcode scanner error:', error)
@@ -212,7 +263,9 @@ const App: React.FC = () => {
 
       {showAddItemModal && (
         <AddItemModal
-          onClose={() => setShowAddItemModal(false)}
+          onClose={() => { setShowAddItemModal(false); setAddItemInitialData(undefined) }}
+          onOpenScanner={() => setShowBarcodeScanner(true)}
+          initialData={addItemInitialData}
         />
       )}
 
@@ -236,7 +289,7 @@ const App: React.FC = () => {
 
           {/* Scan Barcode */}
           <button
-            onClick={() => setShowBarcodeScanner(true)}
+            onClick={() => { setShowAddItemModal(false); setShowBarcodeScanner(true) }}
             className="flex flex-col items-center justify-center py-3 px-2 hover:bg-neutral-50 transition-colors"
           >
             <Scan size={20} className="text-neutral-600 mb-1" />
@@ -245,7 +298,7 @@ const App: React.FC = () => {
 
           {/* Add Item */}
           <button
-            onClick={() => setShowAddItemModal(true)}
+            onClick={() => { setShowBarcodeScanner(false); setShowAddItemModal(true) }}
             className="flex flex-col items-center justify-center py-3 px-2 hover:bg-neutral-50 transition-colors"
           >
             <Plus size={20} className="text-neutral-600 mb-1" />
@@ -258,28 +311,15 @@ const App: React.FC = () => {
             <span className="text-xs font-medium text-neutral-700">Shop</span>
           </button>
 
-          {/* Camera Test */}
+          {/* Categories */}
           <button
-            onClick={runCameraDiagnostic}
-            className="flex flex-col items-center justify-center py-3 px-2 hover:bg-neutral-50 transition-colors"
-          >
-            <Scan size={20} className="text-neutral-600 mb-1" />
-            <span className="text-xs font-medium text-neutral-700">Test</span>
-          </button>
-
-          {/* Cache Demo */}
-          <button
-            onClick={() => setCurrentView('demo')}
+            onClick={() => setCurrentView('categories')}
             className={`flex flex-col items-center justify-center py-3 px-2 transition-colors ${
-              currentView === 'demo'
-                ? 'bg-blue-50 border-t-2 border-blue-500'
-                : 'hover:bg-neutral-50'
+              currentView === 'categories' ? 'bg-primary-50 border-t-2 border-primary-500' : 'hover:bg-neutral-50'
             }`}
           >
-            <Database size={20} className={currentView === 'demo' ? 'text-blue-600 mb-1' : 'text-neutral-600 mb-1'} />
-            <span className={`text-xs font-medium ${currentView === 'demo' ? 'text-blue-700' : 'text-neutral-700'}`}>
-              Demo
-            </span>
+            <BarChart3 size={20} className={currentView === 'categories' ? 'text-primary-600 mb-1' : 'text-neutral-600 mb-1'} />
+            <span className={`text-xs font-medium ${currentView === 'categories' ? 'text-primary-700' : 'text-neutral-700'}`}>Categories</span>
           </button>
         </div>
       </nav>
@@ -300,7 +340,7 @@ const App: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setShowBarcodeScanner(true)}
+            onClick={() => { setShowAddItemModal(false); setShowBarcodeScanner(true) }}
             className="flex flex-col items-center space-y-1 px-4 py-2 rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600"
           >
             <Scan size={20} />
@@ -308,24 +348,14 @@ const App: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setShowAddItemModal(true)}
+            onClick={() => { setShowBarcodeScanner(false); setShowAddItemModal(true) }}
             className="flex flex-col items-center space-y-1 px-4 py-2 rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600"
           >
             <Plus size={20} />
             <span className="text-xs font-medium">Add</span>
           </button>
 
-          <button
-            onClick={() => setCurrentView('demo')}
-            className={`flex flex-col items-center space-y-1 px-4 py-2 rounded-lg transition-colors ${
-              currentView === 'demo'
-                ? 'bg-blue-50 text-blue-700'
-                : 'hover:bg-neutral-50 text-neutral-600'
-            }`}
-          >
-            <Database size={20} />
-            <span className="text-xs font-medium">Demo</span>
-          </button>
+          {/* demo button removed */}
 
           <button className="flex flex-col items-center space-y-1 px-4 py-2 rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600">
             <ShoppingCart size={20} />

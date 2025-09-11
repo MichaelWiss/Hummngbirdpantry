@@ -3,6 +3,8 @@
 
 import { BarcodeService } from './barcode.service'
 import { barcodeCache } from './barcodeCache.service'
+import { enqueue, dequeueAll, removeById, update, type OfflineAction } from './offlineQueue.service'
+import { apiClient } from './apiClient'
 import type { BarcodeCacheConfig } from '@/types'
 
 class BackgroundSyncService {
@@ -238,6 +240,23 @@ class BackgroundSyncService {
 
     } finally {
       this.pendingSyncs.delete(barcode)
+    }
+  }
+
+  // Process offline queue (products upserts, etc.)
+  async processQueue(): Promise<void> {
+    if (!this.isOnline) return
+    const actions = await dequeueAll()
+    for (const action of actions) {
+      try {
+        await apiClient.post(action.endpoint, action.payload)
+        await removeById(action.id)
+      } catch (e: any) {
+        action.retries += 1
+        action.lastError = e?.message || 'Unknown'
+        // simple backoff: keep it, will retry later
+        await update(action)
+      }
     }
   }
 

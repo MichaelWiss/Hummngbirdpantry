@@ -5,61 +5,50 @@ import React, { useState } from 'react'
 import { X, Scan, Plus, AlertCircle, CheckCircle } from 'lucide-react'
 import { usePantry } from '@/hooks/usePantry'
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner'
-import BarcodeScanner from '@/components/barcode/BarcodeScanner'
 import type { ItemCategory, MeasurementUnit, Barcode } from '@/types'
 
 interface AddItemModalProps {
   onClose: () => void
+  onOpenScanner?: () => void
+  initialData?: Partial<{
+    name: string
+    category: ItemCategory
+    quantity: number
+    unit: MeasurementUnit
+    barcode: Barcode | ''
+    notes: string
+  }>
 }
 
-const AddItemModal: React.FC<AddItemModalProps> = ({ onClose }) => {
+const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, initialData }) => {
   const { addItem } = usePantry()
   const barcodeScanner = useBarcodeScanner()
 
-  const [showScanner, setShowScanner] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [formData, setFormData] = useState({
-    name: '',
-    category: 'pantry' as ItemCategory,
-    quantity: 1,
-    unit: 'pieces' as MeasurementUnit,
-    barcode: '' as Barcode | '',
-    notes: ''
+    name: initialData?.name || '',
+    category: initialData?.category || ('pantry' as ItemCategory),
+    quantity: initialData?.quantity ?? 1,
+    unit: initialData?.unit || ('pieces' as MeasurementUnit),
+    barcode: (initialData?.barcode as Barcode | '') || ('' as Barcode | ''),
+    notes: initialData?.notes || ''
   })
 
-  // Handle barcode detection
-  const handleBarcodeDetected = async (barcode: Barcode) => {
-    try {
-      console.log('📱 Barcode scanned in modal:', barcode)
-      const result = await barcodeScanner.onBarcodeDetected(barcode)
+  React.useEffect(() => {
+    if (!initialData) return
+    setFormData(prev => ({
+      ...prev,
+      name: initialData.name ?? prev.name,
+      category: initialData.category ?? prev.category,
+      quantity: initialData.quantity ?? prev.quantity,
+      unit: initialData.unit ?? prev.unit,
+      barcode: (initialData.barcode as Barcode | '') ?? prev.barcode,
+      notes: initialData.notes ?? prev.notes
+    }))
+  }, [initialData])
 
-      if (result.found && result.productData) {
-        // Auto-fill form with scanned data
-        setFormData(prev => ({
-          ...prev,
-          name: result.productData!.name || prev.name,
-          category: result.productData!.category || prev.category,
-          unit: result.productData!.unit || prev.unit,
-          barcode: result.barcode
-        }))
-
-        console.log('✅ Form auto-filled with scanned product data')
-      } else {
-        // Product not found - just set barcode
-        setFormData(prev => ({
-          ...prev,
-          barcode: result.barcode
-        }))
-
-        console.log('⚠️ Product not found, barcode set for manual entry')
-      }
-
-      setShowScanner(false)
-    } catch (error) {
-      console.error('❌ Barcode processing error in modal:', error)
-    }
-  }
+  // Barcode handling is centralized; this modal requests scanner via onOpenScanner
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -78,8 +67,11 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose }) => {
         quantity: formData.quantity,
         unit: formData.unit,
         barcode: formData.barcode || undefined,
-        notes: formData.notes.trim() || undefined
-      })
+        notes: formData.notes.trim() || undefined,
+        purchaseDate: new Date(),
+        status: 'fresh',
+        tags: []
+      } as any)
 
       console.log('✅ Item added successfully:', formData.name)
       onClose()
@@ -95,18 +87,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose }) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  if (showScanner) {
-    return (
-      <BarcodeScanner
-        onBarcodeDetected={handleBarcodeDetected}
-        onError={(error) => {
-          console.error('❌ Scanner error:', error)
-          setShowScanner(false)
-        }}
-        onClose={() => setShowScanner(false)}
-      />
-    )
-  }
+  // Scanner modal is centralized at App level. This modal requests it via onOpenScanner.
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -165,7 +146,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose }) => {
                 </label>
                 <button
                   type="button"
-                  onClick={() => setShowScanner(true)}
+                  onClick={() => { onClose(); onOpenScanner && onOpenScanner() }}
                   className="flex items-center space-x-2 bg-primary-50 hover:bg-primary-100 text-primary-700 px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                 >
                   <Scan size={16} />

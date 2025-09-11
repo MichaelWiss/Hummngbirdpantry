@@ -131,12 +131,14 @@
   - Implement multi-input item addition (manual, barcode, voice, photo)
   - Build comprehensive filtering and search system
   - Add data validation and sanitization
-- [x] **✅ COMPLETED: Barcode Scanning Integration**
+- [x] **✅ BETA: Barcode Scanning Integration + OFF Lookup (pending iOS device verification)**
   - Implement @zxing/library barcode scanning
   - Create camera permission handling
   - Add barcode-to-product lookup service
+  - Integrate Open Food Facts lookup on cache miss; upsert product with quantity=1
   - Add manual entry fallback
   - Create barcode validation and error handling
+  - Note: iOS (Safari/WebKit) requires secure context (HTTPS or localhost). On HTTP over LAN IP, MediaDevices/IndexedDB are blocked; device verification pending after secure context enablement.
 - [x] **🔥 REDESIGN: Convert to one-page mobile-first application**
 - [x] **🔥 REDESIGN: Implement stacked mobile navigation**
 - [x] **🔥 REDESIGN: Create feature cards layout with big buttons**

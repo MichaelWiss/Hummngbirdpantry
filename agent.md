@@ -226,6 +226,9 @@ src/
 - **Code Quality**: Lint + format enforced
 - **Next Risk Area**: Camera/permission edge cases & offline strategy
 
+### iOS Secure Context Note
+- On iOS, all browsers use WebKit (Safari engine). Camera (`navigator.mediaDevices`) and IndexedDB require a secure context (HTTPS or `localhost`). Accessing the app over HTTP via a LAN IP (e.g., `http://192.168.x.x`) will disable these APIs. Use device-trusted HTTPS for on-device testing.
+
 ### Feature Completeness
 - **Core Functionality**: 95% complete (Phase 2 ✅)
 - **Advanced Features**: 0% complete (Phase 2.5 next)

@@ -1,0 +1,14 @@
+{
+    "mcpServers": {
+      "Neon": {
+        "command": "npx",
+        "args": ["-y", "mcp-remote@latest", "https://mcp.neon.tech/mcp"]
+      },
+      "render": {
+        "url": "https://mcp.render.com/mcp",
+        "headers": {
+          "Authorization": "Bearer rnd_mOzrt3RDxl57U7SGX9arRLXPFWfS"
+        }
+      }
+    }
+  }
