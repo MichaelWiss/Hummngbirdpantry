@@ -72,6 +72,8 @@ export interface PantryState {
   actions: {
     // CRUD operations
     addItem: (item: Omit<PantryItem, 'id' | 'lastModified'>) => Promise<void>
+    replaceAll: (items: PantryItem[]) => void
+    upsertLocal: (item: PantryItem) => void
     updateItem: (id: ID, updates: Partial<PantryItem>) => Promise<void>
     removeItem: (id: ID) => Promise<void>
     bulkRemove: (ids: ID[]) => Promise<void>
@@ -245,6 +247,27 @@ export const usePantryStore = create<PantryState>()(
                 error: error instanceof Error ? error.message : 'Failed to add item'
               })
             }
+          },
+          replaceAll: (items) => {
+            set(state => {
+              state.items = items.map(i => ({
+                ...i,
+                ...calculateExpirationMeta(i as PantryItem),
+                lastModified: i.lastModified || new Date()
+              }))
+            })
+          },
+          upsertLocal: (item) => {
+            set(state => {
+              const idx = state.items.findIndex(x => x.id === item.id)
+              const enriched = {
+                ...item,
+                ...calculateExpirationMeta(item as PantryItem),
+                lastModified: new Date()
+              }
+              if (idx >= 0) state.items[idx] = enriched as any
+              else state.items.push(enriched as any)
+            })
           },
 
           // UPDATE ITEM

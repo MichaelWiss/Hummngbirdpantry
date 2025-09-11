@@ -14,7 +14,9 @@ const CategoryList: React.FC<CategoryListProps> = ({ onSelect }) => {
   const counts = React.useMemo(() => {
     const map = new Map<ItemCategory, number>()
     items.forEach(i => {
-      map.set(i.category as ItemCategory, (map.get(i.category as ItemCategory) || 0) + 1)
+      const cat = i.category as ItemCategory
+      const qty = typeof i.quantity === 'number' ? i.quantity : 0
+      map.set(cat, (map.get(cat) || 0) + qty)
     })
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
   }, [items])

@@ -68,8 +68,7 @@
 
   // Files to include in TypeScript compilation
   "include": [
-    "src/**/*",
-    "vite.config.ts"
+    "src/**/*"
   ],
 
   // Files to exclude from TypeScript compilation
@@ -82,7 +81,5 @@
   ],
 
   // TypeScript project references for better monorepo support
-  "references": [
-    { "path": "./tsconfig.node.json" }
-  ]
+  
 }

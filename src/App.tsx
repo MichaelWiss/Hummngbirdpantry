@@ -59,6 +59,8 @@ const App: React.FC = () => {
         // Import cache services dynamically to avoid circular dependencies
         const { BarcodeService } = await import('@/services/barcode.service')
         const { initializeBackgroundSync } = await import('@/services/backgroundSync.service')
+        const { ProductRepository } = await import('@/services/ProductRepository')
+        const { usePantryStore } = await import('@/stores/pantry.store')
 
         // Initialize cache system
         await BarcodeService.initializeCache()
@@ -67,6 +69,17 @@ const App: React.FC = () => {
         // Initialize background sync
         await initializeBackgroundSync()
         console.log('🔄 Background sync service started')
+
+        // Hydrate pantry from local mirror, then server
+        await ProductRepository.init()
+        const localItems = await ProductRepository.hydrateFromLocal()
+        usePantryStore.getState().actions.replaceAll(localItems)
+        try {
+          const serverItems = await ProductRepository.fetchFromServer()
+          if (serverItems.length) {
+            usePantryStore.getState().actions.replaceAll(serverItems)
+          }
+        } catch {/* ignore server fetch errors */}
 
       } catch (error) {
         console.error('❌ Failed to initialize cache system:', error)
@@ -213,13 +226,13 @@ const App: React.FC = () => {
         <BarcodeScanner
           onBarcodeDetected={async (barcode) => {
             try {
-              const { getByBarcode, upsertProduct, incrementQuantity } = await import('@/services/product.service')
+              const { ProductRepository } = await import('@/services/ProductRepository')
               const { fetchProductByBarcode } = await import('@/services/openFoodFacts.service')
-              const current = await getByBarcode(barcode)
+              const current = await ProductRepository.getByBarcode(barcode)
               setShowBarcodeScanner(false)
               if (current) {
                 try {
-                  await incrementQuantity(barcode, 1)
+                  await ProductRepository.increment(barcode, 1)
                   // Optionally enqueue server sync
                   if ((import.meta as any).env?.VITE_API_BASE_URL) {
                     const { enqueue } = await import('@/services/offlineQueue.service')

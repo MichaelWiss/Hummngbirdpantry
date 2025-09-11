@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react'
 import { X, Scan, Plus, AlertCircle, CheckCircle } from 'lucide-react'
-import { usePantry } from '@/hooks/usePantry'
+// import { usePantry } from '@/hooks/usePantry'
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner'
 import type { ItemCategory, MeasurementUnit, Barcode } from '@/types'
 
@@ -21,7 +21,7 @@ interface AddItemModalProps {
 }
 
 const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, initialData }) => {
-  const { addItem } = usePantry()
+  // const { addItem } = usePantry()
   const barcodeScanner = useBarcodeScanner()
 
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -61,7 +61,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
     setIsSubmitting(true)
 
     try {
-      await addItem({
+      const { ProductRepository } = await import('@/services/ProductRepository')
+      await ProductRepository.upsert({
         name: formData.name.trim(),
         category: formData.category,
         quantity: formData.quantity,
