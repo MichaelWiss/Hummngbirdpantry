@@ -1,8 +1,8 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
-import { migrate } from './db'
-import { products } from './routes/products'
+import { migrate } from './db.js'
+import { products } from './routes/products.js'
 
 const app = express()
 const PORT = Number(process.env.PORT || 4000)
