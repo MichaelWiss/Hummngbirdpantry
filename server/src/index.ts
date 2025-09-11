@@ -18,6 +18,17 @@ const origin =
 app.use(cors({ origin }))
 app.use(express.json())
 
+app.get('/', (_req, res) =>
+  res.json({
+    name: 'HummingbirdPantry API',
+    status: 'ok',
+    endpoints: {
+      health: '/health',
+      products: '/api/products'
+    }
+  })
+)
+
 app.get('/health', (_req, res) => res.json({ ok: true }))
 app.use('/api/products', products)
 
