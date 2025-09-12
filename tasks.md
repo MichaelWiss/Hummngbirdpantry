@@ -1,47 +1,69 @@
-# HummingbirdPantry – Development Tasks (Granular)
+# HummingbirdPantry – Core-First Tasks (Neon-first, Robust MVP)
 
-## Current Sprint: Barcode → Save (Granular Milestones)
+## Sprint: Make Main Feature Robust (Neon as Source of Truth)
 
-### Scanner Reliability & iOS Secure Context
-- [ ] iOS secure context: device‑trusted HTTPS for on‑device testing (or `localhost`)
-- [ ] In‑app capability gating banner (iOS WebKit limits on HTTP/LAN IP explained)
-- [ ] Diagnostic action: show secure‑context, UA, mediaDevices and IndexedDB status
-- [ ] Constraint fallback path for `OverconstrainedError` (retry 640×480 @ 15fps)
-- [ ] Ensure all tracks stop on modal close/unmount (no camera leak)
-- [ ] Single‑shot mode toggle (auto‑stop on first stable decode)
+### Blocking Bugs (to fix before any new features)
+- [ ] Scanner overlays duplicate in Chrome/Firefox
+  - Root cause: multiple open triggers without a single-flight guard at App level.
+  - Fix: centralize `openScanner()` in `App.tsx`; ignore while open/opening; ensure only one render path for `BarcodeScanner`.
+  - Acceptance:
+    - Rapid taps on any scan button yield exactly one overlay across Chrome/Firefox/Safari.
+    - No duplicate camera streams; closing the modal releases tracks.
 
-### Data Model & Storage (Local‑first)
-- [ ] Define `Product` type (id, barcode, name, brand, category, quantity, unit, createdAt, updatedAt, image?)
-- [ ] IndexedDB: `products` store (key: `id`, index: `barcode` unique)
-- [ ] IndexedDB: `offlineQueue` store for failed/queued sync (optional)
-- [ ] Service: `product.service.ts` (CRUD + getByBarcode + upsert + queue)
+- [ ] Safari does not autofill after scan (Save disabled)
+  - Root cause: server-first barcode lookup not used to prefill before OFF/manual.
+  - Fix: on scan miss → Local → Server GET `/api/products/:barcode` → OFF → Manual; prefill from server/OFf result.
+  - Acceptance:
+    - If server has item, form prefills (or increments without form) and Save is enabled.
+    - If not found, OFF prefills; if still not found, manual form with barcode prefilled.
 
-### Barcode Scan Flow (MVP)
-- [ ] Open scanner modal UI (video container, overlay, controls, status)
-- [ ] Start ZXing `decodeFromVideoElementContinuously` after camera is ready
-- [ ] Debounce duplicates; accept first stable decode within 500ms window
-- [ ] Validate barcode (digits‑only for UPC/EAN, length guardrails, checksum)
-- [ ] Cache check (IndexedDB) by barcode → hydrate if hit
-- [ ] Lookup via Open Food Facts on miss → map response → internal `Product`
-- [ ] Manual form fallback if providers return no result
+- [ ] Firefox skips autofilling form
+  - Root cause: scan flow bypasses prefill path on some branches.
+  - Fix: unify scan handler to the same Local → Server → OFF → Manual pipeline.
+  - Acceptance:
+    - First valid scan in Firefox follows the same prefill/auto-increment behavior as Chrome/Safari.
 
-### Save & Sync
-- [ ] Save to IndexedDB; optimistic update to pantry store (increment quantity if exists)
-- [ ] POST `/api/products` when online; merge server response into cache
-- [ ] On failure/offline: enqueue to `offlineQueue`; background sync job
+- [ ] Browsers not querying NeonDB consistently
+  - Root cause: local-only fallbacks masking API failures; writes not visibly failing; env/CORS variance.
+  - Fix: Neon-first repository writes (already applied); on failure show banner and block local mutation; verify `VITE_API_BASE_URL` and server CORS.
+  - Acceptance:
+    - Writes hit Neon (visible in server logs/Neon) or surface a user-visible error.
+    - Reload in another browser reflects the same quantities.
 
-### UX & Accessibility
-- [ ] Clear permission/insecure‑context banners with next steps
-- [ ] Scan frame overlay + animated scan line; large, reachable controls
-- [ ] Toasts for decoded, saved, lookup failed, queued for sync
-- [ ] ARIA live region for status; focus trap; return focus to trigger on close
+### 1) Scanner: Single-Flight + Stable Decode
+- [ ] Centralize `openScanner()` in `App.tsx`; ignore while open/opening.
+- [ ] Keep one `BarcodeScanner` render path only.
+- [ ] In scanner: ignore transient decode errors; only fatal camera/permission errors surface.
+- [ ] Ensure tracks stop on close/unmount.
 
-### QA & Acceptance
-- [ ] iOS device (secure context): camera + IndexedDB both functional
-- [ ] Decode common UPC/EAN within ~2s in good light
-- [ ] No camera track active after closing scanner modal
-- [ ] Product appears in pantry; survives reload (persisted)
-- [ ] Manual entry path works when lookup fails
+### 2) Server-First Product Resolution
+- [ ] On scan miss: Local → GET `/api/products/:barcode` → OFF → Manual.
+- [ ] Prefill from server hit to enable Save; optionally auto-increment via PATCH.
+
+### 3) Neon-First CRUD (No Queue)
+- [ ] `ProductRepository.upsert`: call server; persist returned row locally; update store.
+- [ ] `ProductRepository.increment`: server PATCH; persist returned row; update store.
+- [ ] `ProductRepository.update`: server PUT; persist returned row; update store.
+- [ ] `ProductRepository.remove`: server DELETE first; then delete locally and update store.
+- [ ] On failure: show error; do not mutate local.
+
+### 4) Startup Data Flow
+- [ ] On app start: fetch from server; on success, replace store; on failure show banner.
+- [ ] Avoid silent local-only mode.
+
+### 5) Environment & CORS
+- [ ] Confirm `VITE_API_BASE_URL` available in all deploy environments.
+- [ ] Server `CORS_ORIGIN` includes Cloudflare Pages origin.
+
+### 6) Verification (Manual)
+- [ ] Chrome/Firefox/Safari: single overlay; no mid-scan closure on decode noise.
+- [ ] Add item → visible in Neon; reload in another browser shows it.
+- [ ] Increment/edit/delete → reflected immediately in Neon + UI.
+
+## Deferred (after MVP proven)
+- [ ] Re-enable offline queue with single-flight + exponential backoff.
+- [ ] Add idempotency keys to POST/increment/PUT.
+- [ ] Consider changed-since reconciliation after flush.
 
 
 ## Phase 0: Documentation & Planning

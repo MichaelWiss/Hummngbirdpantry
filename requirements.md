@@ -1,354 +1,62 @@
-# HummingbirdPantry - Requirements Document
+# HummingbirdPantry – Core-First Requirements (Neon as Source of Truth)
 
-## Overview
-HummingbirdPantry is a comprehensive inventory management application designed to help users track pantry items, manage shopping lists, receive AI-powered suggestions, and optimize meal planning. The app features smart inventory management, advanced shopping capabilities, voice/photo recognition, and cross-device synchronization with a focus on mobile-first user experience.
+## Goal
+Make the main feature (scan/add/update pantry items) work robustly in all modern browsers with Neon (Postgres) as the single source of truth. Everything else is optional.
+
+## Non‑negotiables
+- All CRUD writes go to Neon first. The UI reconciles from the server response and persists the confirmed row locally for fast reads.
+- If Neon is unreachable, surface it immediately (banner/toast). Do not pretend success, do not queue silently.
+- The scanner opens once, stays open during decode churn, and only closes for user action or fatal camera/permission errors.
+
+## Scope (MVP)
+- Scan → resolve product (Local → Server → OFF → Manual) → Save → Confirmed in Neon → Reflected in UI.
+- View, increment, edit, delete pantry items; changes persist in Neon and are visible across browsers on reload.
 
 ## Functional Requirements
+1) Scanner UX
+- Open/close controlled only by `App` (single-flight open). Multiple triggers call a single guarded `openScanner()`.
+- Continuous decode; ignore transient decoder errors; only fatal camera/permission errors surface.
 
-### Core Features
+2) Product Resolution
+- On scan miss: try local cache by barcode; then GET `/api/products/:barcode`; then OFF; then manual form.
+- On server hit: prefill name/category/unit and allow Save; optionally auto-increment via PATCH.
 
-#### 1. Smart Pantry Inventory Management
-- **Add Items**: Multiple input methods including:
-  - Manual entry with detailed information
-  - Barcode scanning with automatic product lookup
-  - Voice input for hands-free entry
-  - Photo recognition for item identification
+3) Persistence
+- On successful Neon write, update UI from the server-returned row and persist it locally.
+- Local storage (IDB/localStorage) is a read-through cache, not a source of truth.
 
-- **Item Details**: Comprehensive tracking including:
-  - Name, brand, and category
-  - Quantity and unit measurements
-  - Expiration date with color-coded warnings
-  - Purchase date and price tracking
-  - Nutritional information (when available)
-  - Barcode/UPC codes
-  - Custom notes and tags
+4) Error Handling
+- If Neon write fails, show error and do not change local data.
+- If Neon read fails on startup, show an “offline/server unreachable” banner and keep UI read-only until recovery.
 
-- **Smart Features**:
-  - Automatic low-stock detection and alerts
-  - Expiration tracking with predictive warnings
-  - Recipe suggestions based on available ingredients
-  - Meal planning integration with inventory adjustment
-  - Usage pattern analysis and insights
-
-- **Management Actions**:
-  - View items with advanced filtering and search
-  - Edit existing item details
-  - Delete items with confirmation
-  - Bulk operations (delete, categorize, mark as used)
-  - Export/import inventory data
-
-#### 2. Advanced Shopping List Management
-- **Smart List Generation**:
-  - Automatic suggestions from low-stock items
-  - AI-powered suggestions from chat assistant
-  - Recurring items with automatic replenishment
-  - Meal plan integration
-
-- **List Organization**:
-  - Store layout categorization (aisles, sections)
-  - Priority-based sorting
-  - Drag-and-drop reordering
-  - Smart grouping by category or store section
-
-- **Shopping Experience**:
-  - Manual item addition
-  - Voice input for quick additions
-  - Price tracking and budget alerts
-  - Purchase history and trends
-  - Completed items tracking
-
-- **Collaboration Features**:
-  - Share shopping lists with family members
-  - Real-time synchronization
-  - Collaborative editing and checking off items
-
-#### 3. Advanced AI Chat Assistant
-- **Natural Language Processing**:
-  - Voice input/output for hands-free operation
-  - Contextual conversation about pantry contents
-  - Recipe suggestions and meal planning
-  - Inventory queries and insights
-
-- **Smart Features**:
-  - Photo recognition to identify pantry items
-  - Recipe API integration (Spoonacular, Edamam)
-  - Nutritional information and dietary filters
-  - Cooking instructions and ingredient substitutions
-  - Meal planning with automatic inventory adjustment
-
-- **Interactive Capabilities**:
-  - Quick-add suggestions to shopping list
-  - Direct inventory updates from chat
-  - Recipe scaling and modification
-  - Dietary restriction and allergy considerations
-
-#### 4. Analytics & Insights Dashboard
-- **Inventory Analytics**:
-  - Total items, categories, and value tracking
-  - Expiration analysis with waste reduction insights
-  - Usage patterns and consumption trends
-  - Cost analysis and budget tracking
-
-- **Smart Insights**:
-  - Predictive restocking recommendations
-  - Seasonal usage pattern analysis
-  - Waste reduction suggestions
-  - Shopping optimization recommendations
-
-- **Visualizations**:
-  - Interactive charts and graphs
-  - Category breakdowns and trends
-  - Price history and inflation tracking
-  - Nutritional balance analysis
-
-#### 5. Voice & Photo Recognition
-- **Voice Features**:
-  - Hands-free item addition and queries
-  - Voice-activated recipe suggestions
-  - Speech-to-text for chat interactions
-  - Audio feedback for confirmations
-
-- **Photo Recognition**:
-  - Camera-based item identification
-  - Receipt scanning for automatic entry
-  - Label reading for nutritional information
-  - Visual search for recipe ingredients
-
-### User Experience Requirements
-
-#### Mobile-First Design
-- **iPhone Optimized**: Primary target platform with touch-optimized interactions
-- **PWA Capabilities**: Installable app with offline functionality
-- **Responsive Design**: Seamless experience across devices
-- **Gesture Support**: Swipe gestures for navigation and actions
-
-#### Navigation & Interface
-- **Tab-based Interface**: Easy switching between Pantry, Shopping List, Chat, and Analytics views
-- **Voice Commands**: Hands-free navigation and actions
-- **Dark/Light Themes**: User preference with system integration
-- **Intuitive UI**: Clean, modern interface with clear visual hierarchy
-- **Accessibility**: Full keyboard navigation and screen reader support
-
-#### Advanced Interactions
-- **Drag-and-Drop**: Reorder shopping lists and meal plans
-- **Multi-select**: Bulk operations on items
-- **Quick Actions**: Swipe gestures and contextual menus
-- **Search & Filter**: Advanced filtering with saved searches
-
-#### Data Management
-- **Multi-Storage Options**: Local storage, IndexedDB, and optional cloud sync
-- **Data Export/Import**: Multiple formats (JSON, CSV, PDF)
-- **Backup & Restore**: Automatic and manual backup capabilities
-- **Cross-Device Sync**: Optional cloud synchronization
+## Out of Scope (deferred)
+- Offline write queue and background flush
+- Advanced barcode cache and background sync
+- Voice, photo recognition, analytics, shopping lists
+- PWA/service worker beyond basic app shell caching
 
 ## Technical Requirements
+- Frontend: React + TypeScript + Vite. State: Zustand.
+- Server: Express + pg. Endpoints:
+  - GET `/api/products` – list
+  - GET `/api/products/:barcode` – lookup by barcode
+  - POST `/api/products` – upsert (insert or merge by barcode)
+  - PATCH `/api/products/:barcode/increment` – increment quantity
+  - PUT `/api/products/:id` – partial update
+  - DELETE `/api/products/:id` – delete
+- Env: `VITE_API_BASE_URL` on the client; `DATABASE_URL`, `CORS_ORIGIN` on the server.
 
-### Technology Stack
-- **Frontend Framework**: React 18+ with TypeScript
-- **Build Tool**: Vite (fast dev, optimized builds)
-- **Styling**: Tailwind + Radix UI (utility + accessible primitives)
-- **State Management**: Zustand (initial plan for Context+Reducer superseded) + focused domain hooks
-- **Data Persistence**: Planned IndexedDB (pantry, caches) + localStorage for lightweight settings
-- **Testing**: Vitest + React Testing Library + Playwright (progressive rollout)
-- **PWA**: Service worker & offline (planned)
+## Acceptance Criteria
+- Chrome/Firefox/Safari: scanner renders once; does not close on decode noise; first valid scan handles flow end-to-end.
+- Add/update/increment/delete reflect in Neon immediately; UI reconciles from server responses; reload shows the same state across browsers.
+- On server outage, a visible banner appears and writes are blocked; no silent local-only paths.
 
-### Advanced Technical Features
+## Risks & Mitigations
+- CORS/env misconfig → visible banner, block writes, log guidance.
+- Scanner device constraints → fall back to 640×480@15, ignore transient decode errors.
+- Safari IDB limits → local cache is optional; server remains authoritative.
 
-#### APIs & Integrations
-- **Barcode Scanning**: @zxing/library for mobile-optimized scanning
-- **Voice Recognition**: Web Speech API for voice input/output
-- **Camera Access**: MediaDevices API for photo recognition
-- **Recipe APIs**: Integration with Spoonacular, Edamam, or similar
-- **Cloud Storage**: Optional Firebase/Supabase for cross-device sync
-
-#### Performance & Optimization
-- **Code Splitting**: Route-based and component-based splitting
-- **Virtual Scrolling**: For large item lists and chat history
-- **Image Optimization**: Compression and lazy loading
-- **Caching Strategy**: Service worker caching for offline use
-
-### Architecture Requirements
-
-#### State Management
-- **Store Architecture**: Zustand store slices for pantry, scanner, future shopping
-- **Hooks**: Domain hooks (usePantry, useCameraPermissions, useBarcodeZxing, useBarcodeCache planned)
-- **Persistence**: Middleware for localStorage & IndexedDB (planned)
-- **Rationale**: Lower boilerplate & fine-grained subscriptions vs Context reducer
-
-#### Component Architecture
-```
-App (Context Provider + Theme Provider)
-├── AppHeader (Navigation, Search, Voice Control)
-├── StatsDashboard (Analytics & Insights)
-├── ThemeToggle (Dark/Light Mode)
-└── TabSystem
-    ├── PantryView
-    │   ├── PantryGrid (Virtual Scrolling)
-    │   ├── PantryItem (Enhanced Card with Actions)
-    │   ├── AdvancedFilters (Multi-criteria Filtering)
-    │   ├── BarcodeScanner (Mobile-Optimized)
-    │   ├── VoiceInput (Speech Recognition)
-    │   ├── PhotoRecognition (Camera Integration)
-    │   └── AddItemModal (Multi-input Methods)
-    ├── ShoppingListView
-    │   ├── SmartListGenerator (AI Suggestions)
-    │   ├── StoreLayoutOrganizer (Aisle-based Sorting)
-    │   ├── DragDropList (Reorderable Items)
-    │   ├── PriceTracker (Budget Monitoring)
-    │   ├── RecurringItems (Auto-replenishment)
-    │   ├── SharingControls (Family Collaboration)
-    │   └── CompletedItems (Purchase History)
-    ├── ChatView
-    │   ├── MessageHistory (Virtual Scrolling)
-    │   ├── VoiceInterface (Speech I/O)
-    │   ├── PhotoUpload (Item Recognition)
-    │   ├── RecipeIntegration (API Results)
-    │   ├── NutritionFilters (Dietary Preferences)
-    │   ├── SuggestionChips (Quick Actions)
-    │   └── MessageInput (Multi-modal Input)
-    └── AnalyticsView
-        ├── UsageCharts (Interactive Visualizations)
-        ├── PredictionEngine (AI Insights)
-        ├── WasteAnalysis (Reduction Suggestions)
-        └── ExportTools (Data Management)
-```
-
-#### Custom Hooks Architecture
-- **usePantry**: Inventory management and smart suggestions
-- **useShopping**: List generation and optimization
-- **useChat**: AI conversation and recipe integration
-- **useVoice**: Speech recognition and synthesis
-- **useCamera**: Photo capture and barcode scanning
-- **useOffline**: Sync management and offline capabilities
-- **useAnalytics**: Usage tracking and insights
-
-### Performance Requirements
-- **Fast Loading**: Initial load under 2 seconds on mobile
-- **Smooth Interactions**: 60fps animations and transitions
-- **Efficient Rendering**: Virtual scrolling for lists >100 items
-- **Battery Optimization**: Minimize camera and processing usage
-- **Memory Management**: Proper cleanup and garbage collection
-
-### Security & Privacy Requirements
-- **Secret Hygiene**: No private keys committed; history purge if exposure occurs
-- **Secret Scanning**: Pre-commit detect-secrets + PEM blocker
-- **HTTPS Dev**: Optional local HTTPS for iOS camera (self-signed cert guidance)
-- **Data Privacy**: Local-first with optional encrypted cloud sync
-- **Input Validation**: Sanitization + TypeScript type safety
-- **API Security**: Secure key handling (env vars) + rate limiting (future)
-- **Camera Permissions**: Explicit user gesture + secure-context guard
-- **Voice Data**: Local processing (no remote send) unless user opts-in
-- **Future Hardening**: CSP, SW integrity, dependency audit CI
-
-## Non-Functional Requirements
-
-### Usability & User Experience
-- **Accessibility**: WCAG 2.1 AA compliance with keyboard navigation and screen readers
-- **Mobile-First Design**: Optimized for iPhone with touch gestures and PWA capabilities
-- **Voice-First Interactions**: Natural voice commands for hands-free operation
-- **Intuitive Design**: Self-explanatory interface with progressive disclosure
-- **Help System**: Contextual help, tooltips, and interactive tutorials
-
-### Performance & Reliability
-- **Fast Startup**: App loads in under 2 seconds on mobile devices
-- **Offline Functionality**: Core features work without internet connection
-- **Data Persistence**: No data loss during app updates or crashes
-- **Battery Efficiency**: Optimized camera and voice processing usage
-- **Memory Management**: Efficient handling of large item databases
-
-### Maintainability & Development
-- **Clean Architecture**: Modular design with clear separation of concerns
-- **TypeScript Coverage**: 100% type coverage for better maintainability
-- **Comprehensive Testing**: Unit, integration, and E2E test coverage
-- **Documentation**: Inline code documentation and API references
-- **Version Control**: Git-based workflow with semantic versioning
-
-### Compatibility & Platforms
-- **Primary Platform**: iOS Safari (iPhone optimized)
-- **Browser Support**: Modern browsers with PWA capabilities
-- **Device Support**: iPhone, iPad, and modern Android devices
-- **OS Versions**: iOS 15+, Android 10+ with WebView support
-- **Network Conditions**: Works offline and with poor connectivity
-
-### Scalability & Extensibility
-- **Modular Architecture**: Plugin system for future feature additions
-- **API Abstraction**: Clean interfaces for external service integrations
-- **Data Migration**: Support for schema evolution and data upgrades
-- **Performance Scaling**: Efficient handling of large inventories (>1000 items)
-
-## Implementation Phases
-
-### Phase 1: Core MVP (2-3 weeks)
-- Basic pantry inventory management
-- Simple shopping list functionality
-- Local data storage with IndexedDB
-- Mobile-responsive design
-- Basic voice input for item addition
-
-### Phase 2: Enhanced Features (3-4 weeks)
-- Barcode scanning integration
-- Advanced chat assistant with recipe suggestions
-- Drag-and-drop shopping list organization
-- Photo recognition for item identification
-- Dark/light theme support
-
-### Phase 3: Advanced Features (4-5 weeks)
-- Voice input/output system
-- Analytics dashboard with insights
-- Recipe API integration
-- Cross-device synchronization
-- PWA offline capabilities
-
-### Phase 4: Polish & Optimization (2-3 weeks)
-- Performance optimization
-- Comprehensive testing
-- Accessibility improvements
-- User feedback integration
-- Production deployment
-
-## Future Enhancements & Roadmap
-
-### Short-term (3-6 months)
-- **Family Sharing**: Multi-user household support
-- **Advanced Analytics**: Spending trends and waste reduction
-- **Recipe Management**: Personal recipe collection and scaling
-- **Smart Predictions**: AI-powered restocking recommendations
-
-### Medium-term (6-12 months)
-- **Cloud Integration**: Firebase/Supabase for cross-device sync
-- **Advanced AI**: Better recipe suggestions and meal planning
-- **Integration APIs**: Grocery delivery service connections
-- **Advanced Voice**: Multi-language support and natural conversations
-
-### Long-term (1+ years)
-- **IoT Integration**: Smart fridge and pantry scale connections
-- **Advanced Vision**: Real-time inventory scanning
-- **Social Features**: Recipe sharing and community features
-- **Enterprise Features**: Multi-location inventory management
-
-## Success Metrics
-
-### User Engagement
-- **Daily Active Users**: Track app usage patterns
-- **Feature Adoption**: Measure usage of voice, barcode, and chat features
-- **Task Completion**: Monitor successful inventory management workflows
-
-### Technical Performance
-- **Load Times**: Maintain <2 second initial load
-- **Crash Rate**: Target <0.1% crash rate
-- **Offline Usage**: >80% of core features work offline
-- **Battery Impact**: Minimize camera/voice processing drain
-
-### Business Impact
-
-## Core Requirement: Barcode → Product via Open Food Facts (OFF)
-- On successful barcode decode, the app MUST query a free external API to resolve product metadata.
-- Default provider: Open Food Facts (OFF). If barcode exists:
-  - Map OFF fields → internal: name, brand, category (best-effort mapping), optional image/nutrition.
-  - Upsert into local products DB and set quantity = 1 (increment if already present).
-- If not found:
-  - Open Add Item modal prefilled with `barcode` for manual entry.
-- Rationale: zero-cost, broad coverage, and rich data suitable for MVP.
-- **User Retention**: 70% monthly active user retention
-- **Feature Usage**: >60% of users use advanced features (voice, barcode)
-- **User Satisfaction**: >4.5 star app store rating
+## Rollout
+- Phase 1 (now): enforce Neon-first CRUD and single-flight scanner; visible failures.
+- Phase 2 (later): reintroduce queue with idempotency/backoff; add changed‑since reconciliation.
+- Phase 3 (later): advanced features (voice, photo, analytics, shopping).
