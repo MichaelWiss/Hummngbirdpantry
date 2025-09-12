@@ -75,9 +75,10 @@ const App: React.FC = () => {
         const localItems = await ProductRepository.hydrateFromLocal()
         usePantryStore.getState().actions.replaceAll(localItems)
         try {
-          const serverItems = await ProductRepository.fetchFromServer()
-          // Always replace with server as source of truth, even if empty
-          usePantryStore.getState().actions.replaceAll(serverItems)
+          await ProductRepository.fetchFromServer()
+          // After merging server into local mirror, render the local mirror
+          const merged = await ProductRepository.hydrateFromLocal()
+          usePantryStore.getState().actions.replaceAll(merged)
         } catch (e) {
           console.error('❌ Server fetch failed; using local mirror:', e)
         }
