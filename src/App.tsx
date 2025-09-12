@@ -70,17 +70,44 @@ const App: React.FC = () => {
         await initializeBackgroundSync()
         console.log('🔄 Background sync service started')
 
+        // Check API connectivity first
+        const baseUrl = (import.meta as any).env?.VITE_API_BASE_URL
+        if (!baseUrl) {
+          console.error('❌ VITE_API_BASE_URL not configured - running in local-only mode')
+        } else {
+          try {
+            const healthCheck = await fetch(`${baseUrl}/health`)
+            if (healthCheck.ok) {
+              console.log('✅ API server connected:', baseUrl)
+            } else {
+              console.error('❌ API server unhealthy:', healthCheck.status, healthCheck.statusText)
+            }
+          } catch (healthError) {
+            console.error('❌ API server unreachable:', healthError)
+          }
+        }
+
         // Hydrate pantry from local mirror, then server
         await ProductRepository.init()
         const localItems = await ProductRepository.hydrateFromLocal()
         usePantryStore.getState().actions.replaceAll(localItems)
-        try {
-          await ProductRepository.fetchFromServer()
-          // After merging server into local mirror, render the local mirror
-          const merged = await ProductRepository.hydrateFromLocal()
-          usePantryStore.getState().actions.replaceAll(merged)
-        } catch (e) {
-          console.error('❌ Server fetch failed; using local mirror:', e)
+        console.log(`📦 Loaded ${localItems.length} items from local storage`)
+        
+        if (baseUrl) {
+          try {
+            await ProductRepository.fetchFromServer()
+            // After merging server into local mirror, render the local mirror
+            const merged = await ProductRepository.hydrateFromLocal()
+            usePantryStore.getState().actions.replaceAll(merged)
+            console.log(`🔄 Synced with server, now showing ${merged.length} items`)
+          } catch (e: any) {
+            console.error('❌ Server fetch failed; using local mirror:', e)
+            if (e?.message?.includes('API base URL not configured')) {
+              console.error('   → Check VITE_API_BASE_URL environment variable')
+            } else if (e?.message?.includes('failed: 4')) {
+              console.error('   → Check CORS configuration on server')
+            }
+          }
         }
 
       } catch (error) {

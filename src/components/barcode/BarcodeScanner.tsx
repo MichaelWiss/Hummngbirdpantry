@@ -15,23 +15,34 @@ import type { Barcode } from '@/types'
 type PermissionName = 'camera' | 'microphone' | 'geolocation' | 'notifications'
 interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void; uiOnly?: boolean }
 
-// Window-scoped mutex to ensure only one scanner overlay is open
-declare global { interface Window { __HB_SCANNER_OPEN__?: boolean } }
+// Global singleton tracker to prevent multiple lingering overlays
+let __HB_ACTIVE_SCANNER__: symbol | null = null
 
 const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose, uiOnly = false }) => {
-  // Prevent double overlays by using a mutex and bailing out if already open
-  if (typeof window !== 'undefined') {
-    if (window.__HB_SCANNER_OPEN__) {
-      try { onClose() } catch {/* ignore */}
-      return null
-    }
-    window.__HB_SCANNER_OPEN__ = true
-  }
-  useEffect(() => {
-    return () => { if (typeof window !== 'undefined') window.__HB_SCANNER_OPEN__ = false }
-  }, [])
-
+  const instanceId = React.useRef(Symbol('scanner'))
   const autoStartedRef = React.useRef(false)
+  
+  // Improved singleton guard: only remove duplicate nodes, don't prevent mounting
+  React.useEffect(() => {
+    const currentId = instanceId.current
+    if (__HB_ACTIVE_SCANNER__ && __HB_ACTIVE_SCANNER__ !== currentId) {
+      // Remove any existing scanner modals except this one
+      const nodes = document.querySelectorAll('[data-testid="barcode-scanner-modal"]')
+      nodes.forEach((node) => {
+        const isThisInstance = node.getAttribute('data-instance-id') === currentId.toString()
+        if (!isThisInstance && node.parentElement) {
+          node.parentElement.removeChild(node)
+        }
+      })
+    }
+    __HB_ACTIVE_SCANNER__ = currentId
+    
+    return () => {
+      if (__HB_ACTIVE_SCANNER__ === currentId) {
+        __HB_ACTIVE_SCANNER__ = null
+      }
+    }
+  }, [])
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
@@ -297,7 +308,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
   // Diagnostics module removed for baseline
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" data-testid="barcode-scanner-modal">
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" data-testid="barcode-scanner-modal" data-instance-id={instanceId.current.toString()}>
       <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl">
         <div className="flex items-center justify-between p-4 border-b border-neutral-200">
           <div className="flex items-center space-x-2">
