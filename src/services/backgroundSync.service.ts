@@ -274,7 +274,8 @@ class BackgroundSyncService {
           continue
         }
 
-        await apiClient.post(action.endpoint, action.payload)
+        // Use the original HTTP method when flushing queued actions
+        await apiClient.request(action.method, action.endpoint, action.payload)
         await removeById(action.id)
         succeeded++
       } catch (e: any) {

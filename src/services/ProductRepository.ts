@@ -19,7 +19,9 @@ class ProductRepositoryImpl {
   }
 
   async fetchFromServer(): Promise<PantryItem[]> {
+    console.log('🔄 Fetching all items from server...')
     const rows = await pantryApi.getAll()
+    console.log(`✅ Fetched ${rows.length} items from server`)
     // Replace local mirror with server copy (simple approach)
     // For each server item, upsert locally
     for (const item of rows) {
@@ -36,8 +38,11 @@ class ProductRepositoryImpl {
     usePantryStore.getState().actions.upsertLocal(local)
     // 2) enqueue server write; on success the next fetch will reconcile
     try {
+      console.log('🔄 Attempting server upsert for:', local.name)
       await pantryApi.upsert(local)
-    } catch {
+      console.log('✅ Server upsert successful for:', local.name)
+    } catch (e: any) {
+      console.error('❌ Server upsert failed, enqueueing:', e.message)
       await enqueue({ method: 'POST', endpoint: '/api/products', payload: local })
     }
     return local
@@ -51,8 +56,11 @@ class ProductRepositoryImpl {
     } catch {/* ignore local update errors */}
     // server update or enqueue
     try {
+      console.log('🔄 Attempting server update for:', id)
       await pantryApi.update(id, updates)
-    } catch {
+      console.log('✅ Server update successful for:', id)
+    } catch (e: any) {
+      console.error('❌ Server update failed, enqueueing:', e.message)
       await enqueue({ method: 'PUT', endpoint: `/api/products/${id}`, payload: updates })
     }
   }
@@ -66,8 +74,11 @@ class ProductRepositoryImpl {
     usePantryStore.getState().actions.upsertLocal(updated)
     // 2) enqueue server increment
     try {
+      console.log('🔄 Attempting server increment for:', barcode)
       await pantryApi.increment(barcode, by)
-    } catch {
+      console.log('✅ Server increment successful for:', barcode)
+    } catch (e: any) {
+      console.error('❌ Server increment failed, enqueueing:', e.message)
       await enqueue({ method: 'PATCH', endpoint: `/api/products/${barcode}/increment`, payload: { by } })
     }
     return updated
@@ -77,8 +88,11 @@ class ProductRepositoryImpl {
     await this.init()
     await deleteProduct(id as any)
     try {
+      console.log('🔄 Attempting server removal for:', id)
       await pantryApi.remove(id)
-    } catch {
+      console.log('✅ Server removal successful for:', id)
+    } catch (e: any) {
+      console.error('❌ Server removal failed, enqueueing:', e.message)
       await enqueue({ method: 'DELETE', endpoint: `/api/products/${id}`, payload: {} })
     }
   }
