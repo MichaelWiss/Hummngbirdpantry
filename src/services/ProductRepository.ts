@@ -43,6 +43,20 @@ class ProductRepositoryImpl {
     return local
   }
 
+  async update(id: string, updates: Partial<PantryItem>): Promise<void> {
+    await this.init()
+    // optimistic local update
+    try {
+      await usePantryStore.getState().actions.updateItem(id as any, updates)
+    } catch {/* ignore local update errors */}
+    // server update or enqueue
+    try {
+      await pantryApi.update(id, updates)
+    } catch {
+      await enqueue({ method: 'PUT', endpoint: `/api/products/${id}`, payload: updates })
+    }
+  }
+
   async increment(barcode: Barcode, by: number = 1): Promise<PantryItem | null> {
     await this.init()
     // 1) optimistic local
