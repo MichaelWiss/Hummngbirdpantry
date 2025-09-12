@@ -15,26 +15,23 @@ import type { Barcode } from '@/types'
 type PermissionName = 'camera' | 'microphone' | 'geolocation' | 'notifications'
 interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void; uiOnly?: boolean }
 
-// Global singleton tracker (dev-only) to prevent multiple lingering overlays
-let __HB_ACTIVE_SCANNER__: symbol | null = null
+// Window-scoped mutex to ensure only one scanner overlay is open
+declare global { interface Window { __HB_SCANNER_OPEN__?: boolean } }
 
 const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose, uiOnly = false }) => {
-  const instanceId = React.useRef(Symbol('scanner'))
-  const autoStartedRef = React.useRef(false)
-  // Singleton mount guard: ensure only one scanner root exists (stronger: clear others BEFORE first paint)
-  if (typeof document !== 'undefined') {
-    if (__HB_ACTIVE_SCANNER__ && __HB_ACTIVE_SCANNER__ !== instanceId.current) {
-      const nodes = document.querySelectorAll('[data-testid="barcode-scanner-modal"]')
-      nodes.forEach((n) => { n.parentElement?.removeChild(n) })
+  // Prevent double overlays by using a mutex and bailing out if already open
+  if (typeof window !== 'undefined') {
+    if (window.__HB_SCANNER_OPEN__) {
+      try { onClose() } catch {/* ignore */}
+      return null
     }
-    __HB_ACTIVE_SCANNER__ = instanceId.current
+    window.__HB_SCANNER_OPEN__ = true
   }
   useEffect(() => {
-    const sym = instanceId.current
-    return () => {
-      if (__HB_ACTIVE_SCANNER__ === sym) __HB_ACTIVE_SCANNER__ = null
-    }
+    return () => { if (typeof window !== 'undefined') window.__HB_SCANNER_OPEN__ = false }
   }, [])
+
+  const autoStartedRef = React.useRef(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)

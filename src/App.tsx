@@ -129,6 +129,7 @@ const App: React.FC = () => {
             try {
               const { ProductRepository } = await import('@/services/ProductRepository')
               const { BarcodeService } = await import('@/services/barcode.service')
+              const { fetchProductByBarcode } = await import('@/services/openFoodFacts.service')
               const current = await ProductRepository.getByBarcode(barcode)
               setShowBarcodeScanner(false)
               if (current) {
@@ -138,7 +139,11 @@ const App: React.FC = () => {
                 console.log(`Updated quantity: ${current.name} (+1)`) 
                 return
               }
-              const offData = await BarcodeService.lookupProduct(barcode)
+              let offData = await BarcodeService.lookupProduct(barcode)
+              if (!offData) {
+                const off = await fetchProductByBarcode(barcode)
+                if (off.found && off.data) offData = off.data
+              }
               if (offData) {
                 const init = {
                   name: offData.name!,
