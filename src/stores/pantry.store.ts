@@ -71,7 +71,7 @@ export interface PantryState {
   // Actions
   actions: {
     // CRUD operations
-    addItem: (item: Omit<PantryItem, 'id' | 'lastModified'>) => Promise<void>
+    addItem: (item: Omit<PantryItem, 'id' | 'lastModified' | 'status' | 'purchaseDate' | 'tags'>) => Promise<void>
     replaceAll: (items: PantryItem[]) => void
     upsertLocal: (item: PantryItem) => void
     updateItem: (id: ID, updates: Partial<PantryItem>) => Promise<void>
@@ -191,7 +191,7 @@ export const usePantryStore = create<PantryState>()(
           }
 
           // Apply expiration filter
-          if (state.filters.expiringWithinDays) {
+          if (typeof state.filters.expiringWithinDays === 'number' && state.filters.expiringWithinDays > 0) {
             filtered = filtered.filter(item =>
               item.daysToExpiration !== undefined &&
               item.daysToExpiration <= state.filters.expiringWithinDays &&
@@ -229,8 +229,14 @@ export const usePantryStore = create<PantryState>()(
               const newItem: PantryItemWithMeta = {
                 ...itemData,
                 id: generateId(),
+                status: 'fresh',
+                purchaseDate: new Date(),
+                tags: [],
                 lastModified: new Date(),
-                ...calculateExpirationMeta(itemData as PantryItem)
+                ...calculateExpirationMeta(itemData as PantryItem),
+                isExpiringSoon: (itemData as PantryItem).expirationDate ? calculateExpirationMeta(itemData as PantryItem).isExpiringSoon : false,
+                isExpired: (itemData as PantryItem).expirationDate ? calculateExpirationMeta(itemData as PantryItem).isExpired : false,
+                lastUpdated: new Date()
               } as PantryItemWithMeta
 
               set(state => {
@@ -253,7 +259,10 @@ export const usePantryStore = create<PantryState>()(
               state.items = items.map(i => ({
                 ...i,
                 ...calculateExpirationMeta(i as PantryItem),
-                lastModified: i.lastModified || new Date()
+                lastModified: i.lastModified || new Date(),
+                isExpiringSoon: i.expirationDate ? calculateExpirationMeta(i as PantryItem).isExpiringSoon : false,
+                isExpired: i.expirationDate ? calculateExpirationMeta(i as PantryItem).isExpired : false,
+                lastUpdated: new Date()
               }))
             })
           },
@@ -263,7 +272,10 @@ export const usePantryStore = create<PantryState>()(
               const enriched = {
                 ...item,
                 ...calculateExpirationMeta(item as PantryItem),
-                lastModified: new Date()
+                lastModified: new Date(),
+                isExpiringSoon: item.expirationDate ? calculateExpirationMeta(item as PantryItem).isExpiringSoon : false,
+                isExpired: item.expirationDate ? calculateExpirationMeta(item as PantryItem).isExpired : false,
+                lastUpdated: new Date()
               }
               if (idx >= 0) state.items[idx] = enriched as any
               else state.items.push(enriched as any)
@@ -282,18 +294,20 @@ export const usePantryStore = create<PantryState>()(
                 }
 
                 // Update the item
-                Object.assign(state.items[itemIndex], {
+                const target = state.items[itemIndex]!
+                Object.assign(target, {
                   ...updates,
                   lastModified: new Date()
                 })
 
                 // Recalculate expiration metadata if expiration date changed
                 if (updates.expirationDate !== undefined) {
-                  const updatedItem = state.items[itemIndex]
+                  const updatedItem = state.items[itemIndex]!
                   const expirationMeta = calculateExpirationMeta(updatedItem)
-                  Object.assign(state.items[itemIndex], expirationMeta)
+                  Object.assign(updatedItem, expirationMeta)
                 }
 
+                ;(state.items[itemIndex] as any).lastUpdated = new Date()
                 state.loading = 'success'
               })
 
@@ -532,9 +546,4 @@ export const usePantryStats = () => {
 // TYPE EXPORTS
 // ============================================================================
 
-export type {
-  PantryItemWithMeta,
-  PantryFilters,
-  PantrySortOption,
-  PantryState
-} from './pantry.store'
+// (Removed self re-exports to avoid conflicts)

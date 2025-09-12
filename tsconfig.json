@@ -77,7 +77,8 @@
     "dist",
     "coverage",
     "**/*.spec.ts",
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "src/test/**/*"
   ],
 
   // TypeScript project references for better monorepo support

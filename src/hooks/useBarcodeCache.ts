@@ -22,11 +22,6 @@ export const useBarcodeCache = () => {
     lastCleanup: null
   })
 
-  // Initialize cache on mount
-  useEffect(() => {
-    initializeCache()
-  }, [initializeCache])
-
   // Initialize the cache system
   const initializeCache = useCallback(async () => {
     if (state.isInitialized || state.isInitializing) {
@@ -61,6 +56,11 @@ export const useBarcodeCache = () => {
       }))
     }
   }, [state.isInitialized, state.isInitializing])
+
+  // Initialize cache on mount
+  useEffect(() => {
+    initializeCache()
+  }, [initializeCache])
 
   // Refresh cache statistics
   const refreshStats = useCallback(async () => {

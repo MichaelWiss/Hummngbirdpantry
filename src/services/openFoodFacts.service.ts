@@ -43,7 +43,7 @@ export const fetchProductByBarcode = async (barcode: Barcode): Promise<{ found: 
       found: true,
       data: {
         name: name || 'Unknown Product',
-        brand,
+        ...(brand ? { brand } : {}),
         category
       }
     }

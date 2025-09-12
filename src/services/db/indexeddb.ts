@@ -80,7 +80,11 @@ export const tx = <T = unknown>(
     const memStore = {
       put: (value: any) => {
         const keyPath = 'id' in value ? 'id' : Object.keys(value)[0]
-        store.set(value[keyPath], value)
+        const key = value[keyPath]
+        if (key === undefined) {
+          throw new Error('In-memory store put requires a defined key')
+        }
+        store.set(key, value)
         return { onsuccess: null as any, onerror: null as any }
       },
       get: (key: any) => ({ result: store.get(key), onsuccess: null as any, onerror: null as any }),

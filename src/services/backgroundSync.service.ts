@@ -3,7 +3,7 @@
 
 import { BarcodeService } from './barcode.service'
 import { barcodeCache } from './barcodeCache.service'
-import { enqueue, dequeueAll, removeById, update, type OfflineAction } from './offlineQueue.service'
+import { dequeueAll, removeById, update } from './offlineQueue.service'
 import { apiClient } from './apiClient'
 import type { BarcodeCacheConfig } from '@/types'
 

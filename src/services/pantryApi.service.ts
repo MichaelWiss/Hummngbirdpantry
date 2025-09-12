@@ -33,14 +33,14 @@ const toClient = (row: ServerProduct): PantryItem => {
 }
 
 const toServer = (item: Partial<PantryItem>) => ({
-  id: item.id,
-  name: item.name,
-  brand: item.brand,
-  category: item.category,
-  quantity: item.quantity,
-  unit: item.unit,
-  barcode: item.barcode,
-  notes: item.notes
+  ...(item.id ? { id: item.id } : {}),
+  ...(item.name ? { name: item.name } : {}),
+  ...(item.brand ? { brand: item.brand } : {}),
+  ...(item.category ? { category: item.category } : {}),
+  ...(typeof item.quantity === 'number' ? { quantity: item.quantity } : {}),
+  ...(item.unit ? { unit: item.unit } : {}),
+  ...(item.barcode ? { barcode: item.barcode } : {}),
+  ...(item.notes ? { notes: item.notes } : {})
 })
 
 export const pantryApi = {

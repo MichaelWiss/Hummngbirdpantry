@@ -3,7 +3,7 @@
 
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App.tsx'
+import App from './App'
 
 // Import global styles - this includes Tailwind CSS and custom styles
 import './assets/styles/index.css'
