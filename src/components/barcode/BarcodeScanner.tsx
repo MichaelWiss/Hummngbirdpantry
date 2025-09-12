@@ -15,23 +15,11 @@ import type { Barcode } from '@/types'
 type PermissionName = 'camera' | 'microphone' | 'geolocation' | 'notifications'
 interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void; uiOnly?: boolean }
 
-// Window-scoped guard to ensure only one scanner overlay is active
-declare global { interface Window { __HB_SCANNER_OPEN__?: boolean } }
-
 const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose, uiOnly = false }) => {
   const instanceId = React.useRef(Date.now() + Math.random())
   const autoStartedRef = React.useRef(false)
   
-  // State guard: prevent multiple overlays without DOM mutation
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (window.__HB_SCANNER_OPEN__) {
-      try { onClose() } catch {/* ignore */}
-      return
-    }
-    window.__HB_SCANNER_OPEN__ = true
-    return () => { window.__HB_SCANNER_OPEN__ = false }
-  }, [onClose])
+  // No component-level singleton guards; App controls single render
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)

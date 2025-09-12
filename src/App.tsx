@@ -166,10 +166,15 @@ const App: React.FC = () => {
                 console.log(`Updated quantity: ${current.name} (+1)`) 
                 return
               }
-              let offData = await BarcodeService.lookupProduct(barcode)
+              // Try server lookup by barcode before OFF fallback
+              const { pantryApi } = await import('@/services/pantryApi.service')
+              let offData = await pantryApi.getByBarcode(barcode) as any
               if (!offData) {
-                const off = await fetchProductByBarcode(barcode)
-                if (off.found && off.data) offData = off.data
+                offData = await BarcodeService.lookupProduct(barcode)
+                if (!offData) {
+                  const off = await fetchProductByBarcode(barcode)
+                  if (off.found && off.data) offData = off.data
+                }
               }
               if (offData) {
                 const init = {
@@ -226,7 +231,7 @@ const App: React.FC = () => {
 
           {/* Scan Barcode */}
           <button
-            onClick={() => { setShowAddItemModal(false); setShowBarcodeScanner(true) }}
+            onClick={() => { if (showBarcodeScanner) return; setShowAddItemModal(false); setShowBarcodeScanner(true) }}
             className="flex flex-col items-center justify-center py-3 px-2 hover:bg-neutral-50 transition-colors"
           >
             <Scan size={20} className="text-neutral-600 mb-1" />
@@ -235,7 +240,7 @@ const App: React.FC = () => {
 
           {/* Add Item */}
           <button
-            onClick={() => { setShowBarcodeScanner(false); setShowAddItemModal(true) }}
+            onClick={() => { if (showAddItemModal) return; setShowBarcodeScanner(false); setShowAddItemModal(true) }}
             className="flex flex-col items-center justify-center py-3 px-2 hover:bg-neutral-50 transition-colors"
           >
             <Plus size={20} className="text-neutral-600 mb-1" />
@@ -277,7 +282,7 @@ const App: React.FC = () => {
           </button>
 
           <button
-            onClick={() => { setShowAddItemModal(false); setShowBarcodeScanner(true) }}
+            onClick={() => { if (showBarcodeScanner) return; setShowAddItemModal(false); setShowBarcodeScanner(true) }}
             className="flex flex-col items-center space-y-1 px-4 py-2 rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600"
           >
             <Scan size={20} />
@@ -285,7 +290,7 @@ const App: React.FC = () => {
           </button>
 
           <button
-            onClick={() => { setShowBarcodeScanner(false); setShowAddItemModal(true) }}
+            onClick={() => { if (showAddItemModal) return; setShowBarcodeScanner(false); setShowAddItemModal(true) }}
             className="flex flex-col items-center space-y-1 px-4 py-2 rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600"
           >
             <Plus size={20} />

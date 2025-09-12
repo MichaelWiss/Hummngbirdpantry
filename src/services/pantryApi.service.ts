@@ -49,6 +49,16 @@ export const pantryApi = {
     return (rows || []).map(toClient)
   },
 
+  async getByBarcode(barcode: Barcode): Promise<PantryItem | null> {
+    try {
+      const row = await apiClient.get<ServerProduct>(`/api/products/${barcode}`)
+      if (!row) return null
+      return toClient(row)
+    } catch {
+      return null
+    }
+  },
+
   async upsert(partial: Partial<PantryItem>): Promise<PantryItem> {
     const payload = toServer(partial)
     const data = await apiClient.post('/api/products', payload)
