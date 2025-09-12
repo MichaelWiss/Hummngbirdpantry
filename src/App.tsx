@@ -127,35 +127,26 @@ const App: React.FC = () => {
           onBarcodeDetected={async (barcode) => {
             try {
               const { ProductRepository } = await import('@/services/ProductRepository')
-              const { fetchProductByBarcode } = await import('@/services/openFoodFacts.service')
+              const { BarcodeService } = await import('@/services/barcode.service')
               const current = await ProductRepository.getByBarcode(barcode)
               setShowBarcodeScanner(false)
               if (current) {
                 try {
                   await ProductRepository.increment(barcode, 1)
-                  // Optionally enqueue server sync
-                  if ((import.meta as any).env?.VITE_API_BASE_URL) {
-                    const { enqueue } = await import('@/services/offlineQueue.service')
-                    await enqueue({ method: 'POST', endpoint: '/api/products', payload: { ...current, quantity: current.quantity + 1 } })
-                  }
                 } catch (e) { console.warn('Local update failed (still usable):', e) }
                 console.log(`Updated quantity: ${current.name} (+1)`) 
                 return
               }
-              const off = await fetchProductByBarcode(barcode)
-              if (off.found && off.data) {
+              const offData = await BarcodeService.lookupProduct(barcode)
+              if (offData) {
                 const init = {
-                  name: off.data.name!,
-                  category: off.data.category as ItemCategory,
+                  name: offData.name!,
+                  category: offData.category as ItemCategory,
                   quantity: 1,
                   unit: 'pieces' as MeasurementUnit,
                   barcode
                 }
                 setAddItemInitialData(init)
-                if ((import.meta as any).env?.VITE_API_BASE_URL) {
-                  const { enqueue } = await import('@/services/offlineQueue.service')
-                  await enqueue({ method: 'POST', endpoint: '/api/products', payload: init })
-                }
                 setShowAddItemModal(true)
               } else {
                 setAddItemInitialData({ barcode })
