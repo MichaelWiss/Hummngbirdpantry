@@ -37,6 +37,8 @@ class BackgroundSyncService {
     // Perform initial sync if online
     if (this.isOnline) {
       await this.performFullSync()
+      // Process any queued offline actions after initial sync
+      try { await this.processQueue() } catch (e) { console.warn('⚠️ Queue flush at init failed:', e) }
     }
 
     console.log('✅ Background sync service initialized')
@@ -58,6 +60,8 @@ class BackgroundSyncService {
 
     // Perform immediate sync when coming online
     await this.performFullSync()
+    // Process any queued offline actions
+    try { await this.processQueue() } catch (e) { console.warn('⚠️ Queue flush on online failed:', e) }
 
     // Restart periodic sync
     if (this.config.enableBackgroundSync) {
@@ -96,6 +100,7 @@ class BackgroundSyncService {
     this.syncInterval = setInterval(async () => {
       if (this.isOnline) {
         await this.performIncrementalSync()
+        try { await this.processQueue() } catch (e) { console.warn('⚠️ Queue flush on interval failed:', e) }
       }
     }, this.config.syncInterval)
   }
@@ -204,6 +209,9 @@ class BackgroundSyncService {
 
       console.log(`✅ Incremental sync completed: ${synced} synced, ${failed} failed`)
 
+      // Process any queued offline actions
+      await this.processQueue()
+
     } catch (error) {
       console.error('❌ Incremental sync failed:', error)
     }
@@ -246,18 +254,40 @@ class BackgroundSyncService {
   // Process offline queue (products upserts, etc.)
   async processQueue(): Promise<void> {
     if (!this.isOnline) return
+
     const actions = await dequeueAll()
+    if (actions.length === 0) return
+
+    console.log(`📤 Processing ${actions.length} queued offline actions`)
+
+    let processed = 0
+    let succeeded = 0
+    let failed = 0
+
     for (const action of actions) {
       try {
+        // Skip actions that have exceeded max retries
+        if (action.retries >= 5) {
+          console.warn(`⚠️ Skipping action ${action.id} - exceeded max retries (${action.retries})`)
+          await removeById(action.id) // Remove permanently
+          failed++
+          continue
+        }
+
         await apiClient.post(action.endpoint, action.payload)
         await removeById(action.id)
+        succeeded++
       } catch (e: any) {
         action.retries += 1
         action.lastError = e?.message || 'Unknown'
-        // simple backoff: keep it, will retry later
+        console.warn(`⚠️ Failed to process queued action ${action.id} (attempt ${action.retries}):`, e?.message)
         await update(action)
+        failed++
       }
+      processed++
     }
+
+    console.log(`✅ Queue processing completed: ${succeeded} succeeded, ${failed} failed, ${processed} total`)
   }
 
   // Get recently accessed barcodes
