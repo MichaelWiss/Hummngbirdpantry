@@ -247,7 +247,8 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
           }
         } else if (err && !(err instanceof NotFoundException)) {
           if ((err as any)?.name === 'IndexSizeError') return
-          onError((err as any)?.message || 'Decode error')
+          // Ignore transient decode errors; only surface fatal camera/permission errors
+          if ((import.meta as any).env?.DEV) console.debug('[Scanner decode warning]', (err as any)?.message || err)
         }
       })
     } catch (e: any) {

@@ -27,7 +27,16 @@ export const openDatabase = async (options: OpenOptions): Promise<DBHandle> => {
   if (!secure || !idbAvailable) {
     handle.mode = 'memory'
     for (const s of options.stores) {
-      handle.memory.set(s.name, new Map())
+      const mem = new Map()
+      // Hydrate from localStorage snapshot if present
+      try {
+        const raw = localStorage.getItem(`idb:${options.dbName}:${s.name}`)
+        if (raw) {
+          const arr = JSON.parse(raw) as Array<[any, any]>
+          for (const [k, v] of arr) mem.set(k, v)
+        }
+      } catch {/* ignore */}
+      handle.memory.set(s.name, mem)
     }
     return handle
   }
@@ -77,6 +86,13 @@ export const tx = <T = unknown>(
   if (handle.mode === 'memory') {
     // For memory mode, emulate basic put/get/getAll/getByIndex/delete
     const store = handle.memory.get(storeName) as Map<any, any>
+    const persist = () => {
+      try {
+        const key = `idb:${(options as any).dbName || 'db'}:${storeName}`
+        const arr = Array.from(store.entries())
+        localStorage.setItem(key, JSON.stringify(arr))
+      } catch {/* ignore */}
+    }
     const memStore = {
       put: (value: any) => {
         const keyPath = 'id' in value ? 'id' : Object.keys(value)[0]
@@ -85,11 +101,12 @@ export const tx = <T = unknown>(
           throw new Error('In-memory store put requires a defined key')
         }
         store.set(key, value)
+        persist()
         return { onsuccess: null as any, onerror: null as any }
       },
       get: (key: any) => ({ result: store.get(key), onsuccess: null as any, onerror: null as any }),
       getAll: () => ({ result: Array.from(store.values()), onsuccess: null as any, onerror: null as any }),
-      delete: (key: any) => { store.delete(key); return { onsuccess: null as any, onerror: null as any } },
+      delete: (key: any) => { store.delete(key); persist(); return { onsuccess: null as any, onerror: null as any } },
       index: (_: string) => ({
         get: (key: any) => ({ result: Array.from(store.values()).find((v: any) => v.barcode === key), onsuccess: null as any, onerror: null as any })
       })

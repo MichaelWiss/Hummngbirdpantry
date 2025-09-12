@@ -12,6 +12,7 @@ class BackgroundSyncService {
   private isOnline: boolean = navigator.onLine
   private config: BarcodeCacheConfig
   private pendingSyncs: Set<string> = new Set()
+  private isProcessingQueue: boolean = false
 
   constructor(config: BarcodeCacheConfig) {
     this.config = config
@@ -254,6 +255,8 @@ class BackgroundSyncService {
   // Process offline queue (products upserts, etc.)
   async processQueue(): Promise<void> {
     if (!this.isOnline) return
+    if (this.isProcessingQueue) return
+    this.isProcessingQueue = true
 
     const actions = await dequeueAll()
     if (actions.length === 0) return
@@ -264,6 +267,7 @@ class BackgroundSyncService {
     let succeeded = 0
     let failed = 0
 
+    const now = Date.now()
     for (const action of actions) {
       try {
         // Skip actions that have exceeded max retries
@@ -274,6 +278,12 @@ class BackgroundSyncService {
           continue
         }
 
+        // Exponential backoff using nextAttemptAt (ms); if absent, compute from retries
+        const nextAttemptAt = (action as any).nextAttemptAt as number | undefined
+        if (nextAttemptAt && nextAttemptAt > now) {
+          continue
+        }
+
         // Use the original HTTP method when flushing queued actions
         await apiClient.request(action.method, action.endpoint, action.payload)
         await removeById(action.id)
@@ -281,6 +291,10 @@ class BackgroundSyncService {
       } catch (e: any) {
         action.retries += 1
         action.lastError = e?.message || 'Unknown'
+        // compute nextAttemptAt: 1m, 5m, 15m, 60m, 360m
+        const delays = [60_000, 300_000, 900_000, 3_600_000, 21_600_000]
+        const idx = Math.min(action.retries - 1, delays.length - 1)
+        ;(action as any).nextAttemptAt = Date.now() + delays[idx]
         console.warn(`⚠️ Failed to process queued action ${action.id} (attempt ${action.retries}):`, e?.message)
         await update(action)
         failed++
@@ -289,6 +303,7 @@ class BackgroundSyncService {
     }
 
     console.log(`✅ Queue processing completed: ${succeeded} succeeded, ${failed} failed, ${processed} total`)
+    this.isProcessingQueue = false
   }
 
   // Get recently accessed barcodes
