@@ -1,6 +1,5 @@
 import { initProductDB, listProducts, upsertProduct, getByBarcode, incrementQuantity, deleteProduct } from '@/services/product.service'
 import { pantryApi } from '@/services/pantryApi.service'
-import { enqueue } from '@/services/offlineQueue.service'
 import type { PantryItem, Barcode } from '@/types'
 import { usePantryStore } from '@/stores/pantry.store'
 
@@ -32,69 +31,38 @@ class ProductRepositoryImpl {
 
   async upsert(item: Partial<PantryItem>): Promise<PantryItem> {
     await this.init()
-    // 1) optimistic local write
-    const local = await upsertProduct(item as any)
-    // reflect in UI immediately
-    usePantryStore.getState().actions.upsertLocal(local)
-    // 2) enqueue server write; on success the next fetch will reconcile
-    try {
-      console.log('🔄 Attempting server upsert for:', local.name)
-      await pantryApi.upsert(local)
-      console.log('✅ Server upsert successful for:', local.name)
-    } catch (e: any) {
-      console.error('❌ Server upsert failed, enqueueing:', e.message)
-      await enqueue({ method: 'POST', endpoint: '/api/products', payload: local })
-    }
-    return local
+    // Neon-first: write to server, reconcile from response
+    const serverItem = await pantryApi.upsert(item)
+    // persist confirmed row locally and reflect in UI
+    const persisted = await upsertProduct(serverItem)
+    usePantryStore.getState().actions.upsertLocal(persisted)
+    return persisted
   }
 
   async update(id: string, updates: Partial<PantryItem>): Promise<void> {
     await this.init()
-    // optimistic local update
-    try {
-      await usePantryStore.getState().actions.updateItem(id as any, updates)
-    } catch {/* ignore local update errors */}
-    // server update or enqueue
-    try {
-      console.log('🔄 Attempting server update for:', id)
-      await pantryApi.update(id, updates)
-      console.log('✅ Server update successful for:', id)
-    } catch (e: any) {
-      console.error('❌ Server update failed, enqueueing:', e.message)
-      await enqueue({ method: 'PUT', endpoint: `/api/products/${id}`, payload: updates })
-    }
+    // Neon-first: update on server, reconcile from response
+    const serverItem = await pantryApi.update(id, updates)
+    const persisted = await upsertProduct(serverItem)
+    usePantryStore.getState().actions.upsertLocal(persisted)
   }
 
   async increment(barcode: Barcode, by: number = 1): Promise<PantryItem | null> {
     await this.init()
-    // 1) optimistic local
-    const updated = await incrementQuantity(barcode, by)
-    if (!updated) return null
-    // reflect in UI immediately
-    usePantryStore.getState().actions.upsertLocal(updated)
-    // 2) enqueue server increment
-    try {
-      console.log('🔄 Attempting server increment for:', barcode)
-      await pantryApi.increment(barcode, by)
-      console.log('✅ Server increment successful for:', barcode)
-    } catch (e: any) {
-      console.error('❌ Server increment failed, enqueueing:', e.message)
-      await enqueue({ method: 'PATCH', endpoint: `/api/products/${barcode}/increment`, payload: { by } })
-    }
-    return updated
+    // Neon-first: increment on server, reconcile from response
+    const serverItem = await pantryApi.increment(barcode, by)
+    if (!serverItem) return null
+    const persisted = await upsertProduct(serverItem)
+    usePantryStore.getState().actions.upsertLocal(persisted)
+    return persisted
   }
 
   async remove(id: string): Promise<void> {
     await this.init()
+    // Neon-first: delete on server first, then locally
+    await pantryApi.remove(id)
     await deleteProduct(id as any)
-    try {
-      console.log('🔄 Attempting server removal for:', id)
-      await pantryApi.remove(id)
-      console.log('✅ Server removal successful for:', id)
-    } catch (e: any) {
-      console.error('❌ Server removal failed, enqueueing:', e.message)
-      await enqueue({ method: 'DELETE', endpoint: `/api/products/${id}`, payload: {} })
-    }
+    try { await usePantryStore.getState().actions.removeItem(id as any) } catch { /* ignore UI remove errors */ }
   }
 
   async getByBarcode(barcode: Barcode): Promise<PantryItem | null> {
