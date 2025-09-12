@@ -76,10 +76,11 @@ const App: React.FC = () => {
         usePantryStore.getState().actions.replaceAll(localItems)
         try {
           const serverItems = await ProductRepository.fetchFromServer()
-          if (serverItems.length) {
-            usePantryStore.getState().actions.replaceAll(serverItems)
-          }
-        } catch {/* ignore server fetch errors */}
+          // Always replace with server as source of truth, even if empty
+          usePantryStore.getState().actions.replaceAll(serverItems)
+        } catch (e) {
+          console.error('❌ Server fetch failed; using local mirror:', e)
+        }
 
       } catch (error) {
         console.error('❌ Failed to initialize cache system:', error)

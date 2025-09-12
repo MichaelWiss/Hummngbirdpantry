@@ -19,17 +19,13 @@ class ProductRepositoryImpl {
   }
 
   async fetchFromServer(): Promise<PantryItem[]> {
-    try {
-      const rows = await pantryApi.getAll()
-      // Replace local mirror with server copy (simple approach)
-      // For each server item, upsert locally
-      for (const item of rows) {
-        await upsertProduct(item)
-      }
-      return rows
-    } catch {
-      return []
+    const rows = await pantryApi.getAll()
+    // Replace local mirror with server copy (simple approach)
+    // For each server item, upsert locally
+    for (const item of rows) {
+      await upsertProduct(item)
     }
+    return rows
   }
 
   async upsert(item: Partial<PantryItem>): Promise<PantryItem> {
