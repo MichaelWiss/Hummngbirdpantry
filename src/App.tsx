@@ -28,6 +28,21 @@ const App: React.FC = () => {
     notes: string
   }> | undefined>(undefined)
 
+  // Prevent double scanner overlays across rapid taps/renders
+  const scannerOpenRef = React.useRef(false)
+  const openScanner = React.useCallback(() => {
+    if (scannerOpenRef.current) {
+      console.log('Scanner already open or opening, ignoring request.')
+      return
+    }
+    scannerOpenRef.current = true
+    setShowAddItemModal(false)
+    setShowBarcodeScanner(true)
+  }, [])
+  React.useEffect(() => {
+    if (!showBarcodeScanner) scannerOpenRef.current = false
+  }, [showBarcodeScanner])
+
   // Dev-only: filter a benign ZXing / video element warning that can appear once during
   // stream handoff ("Trying to play video that is already playing."). This prevents
   // log noise without hiding other warnings. Guarded so we don't wrap multiple times
@@ -166,20 +181,29 @@ const App: React.FC = () => {
                 console.log(`Updated quantity: ${current.name} (+1)`) 
                 return
               }
-              // Try server lookup by barcode before OFF fallback
+              // Try server lookup by barcode first
               const { pantryApi } = await import('@/services/pantryApi.service')
-              let offData = await pantryApi.getByBarcode(barcode) as any
-              if (!offData) {
-                offData = await BarcodeService.lookupProduct(barcode)
-                if (!offData) {
-                  const off = await fetchProductByBarcode(barcode)
-                  if (off.found && off.data) offData = off.data
+              const serverItem = await pantryApi.getByBarcode(barcode)
+              if (serverItem) {
+                try {
+                  await ProductRepository.increment(barcode, 1)
+                  console.log(`Updated quantity from server: ${serverItem.name} (+1)`) 
+                } catch (e) {
+                  console.error('Server increment failed:', e)
+                  alert('Failed to update item on server. Please try again.')
                 }
+                return
               }
-              if (offData) {
+              // Fallback to OFF/cache for prefill, then manual
+              let prefill = await BarcodeService.lookupProduct(barcode)
+              if (!prefill) {
+                const off = await fetchProductByBarcode(barcode)
+                if (off.found && off.data) prefill = off.data
+              }
+              if (prefill) {
                 const init = {
-                  name: offData.name!,
-                  category: offData.category as ItemCategory,
+                  name: prefill.name!,
+                  category: prefill.category as ItemCategory,
                   quantity: 1,
                   unit: 'pieces' as MeasurementUnit,
                   barcode
@@ -206,7 +230,7 @@ const App: React.FC = () => {
       {showAddItemModal && (
         <AddItemModal
           onClose={() => { setShowAddItemModal(false); setAddItemInitialData(undefined) }}
-          onOpenScanner={() => setShowBarcodeScanner(true)}
+          onOpenScanner={openScanner}
           {...(addItemInitialData ? { initialData: addItemInitialData } : {})}
         />
       )}
@@ -231,7 +255,7 @@ const App: React.FC = () => {
 
           {/* Scan Barcode */}
           <button
-            onClick={() => { if (showBarcodeScanner) return; setShowAddItemModal(false); setShowBarcodeScanner(true) }}
+            onClick={openScanner}
             className="flex flex-col items-center justify-center py-3 px-2 hover:bg-neutral-50 transition-colors"
           >
             <Scan size={20} className="text-neutral-600 mb-1" />
@@ -282,7 +306,7 @@ const App: React.FC = () => {
           </button>
 
           <button
-            onClick={() => { if (showBarcodeScanner) return; setShowAddItemModal(false); setShowBarcodeScanner(true) }}
+            onClick={openScanner}
             className="flex flex-col items-center space-y-1 px-4 py-2 rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600"
           >
             <Scan size={20} />
