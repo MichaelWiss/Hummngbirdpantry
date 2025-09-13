@@ -21,8 +21,16 @@ class ProductRepositoryImpl {
     console.log('🔄 Fetching all items from server...')
     const rows = await pantryApi.getAll()
     console.log(`✅ Fetched ${rows.length} items from server`)
-    // Replace local mirror with server copy (simple approach)
-    // For each server item, upsert locally
+    // Replace local mirror with server copy: clear missing locals
+    const local = await listProducts()
+    const serverIds = new Set(rows.map(r => r.id))
+    // delete locals not on server
+    for (const li of local) {
+      if (!serverIds.has(li.id)) {
+        try { await deleteProduct(li.id as any) } catch { /* ignore */ }
+      }
+    }
+    // upsert all server items
     for (const item of rows) {
       await upsertProduct(item)
     }

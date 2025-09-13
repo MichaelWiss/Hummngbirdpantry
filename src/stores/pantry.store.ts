@@ -222,37 +222,9 @@ export const usePantryStore = create<PantryState>()(
         // ACTIONS
         actions: {
           // ADD ITEM
-          addItem: async (itemData) => {
-            set({ loading: 'loading', error: null })
-
-            try {
-              const newItem: PantryItemWithMeta = {
-                ...itemData,
-                id: generateId(),
-                status: 'fresh',
-                purchaseDate: new Date(),
-                tags: [],
-                lastModified: new Date(),
-                ...calculateExpirationMeta(itemData as PantryItem),
-                isExpiringSoon: (itemData as PantryItem).expirationDate ? calculateExpirationMeta(itemData as PantryItem).isExpiringSoon : false,
-                isExpired: (itemData as PantryItem).expirationDate ? calculateExpirationMeta(itemData as PantryItem).isExpired : false,
-                lastUpdated: new Date()
-              } as PantryItemWithMeta
-
-              set(state => {
-                state.items.push(newItem)
-                state.loading = 'success'
-              })
-
-              // Simulate API delay for realistic UX
-              await new Promise(resolve => setTimeout(resolve, 300))
-
-            } catch (error) {
-              set({
-                loading: 'error',
-                error: error instanceof Error ? error.message : 'Failed to add item'
-              })
-            }
+          addItem: async (_itemData) => {
+            // Deprecated: do not write locally. All writes must go through server via ProductRepository.
+            set({ loading: 'error', error: 'Writes must go through server. Use ProductRepository.' })
           },
           replaceAll: (items) => {
             set(state => {
@@ -283,89 +255,18 @@ export const usePantryStore = create<PantryState>()(
           },
 
           // UPDATE ITEM
-          updateItem: async (id, updates) => {
-            set({ loading: 'loading', error: null })
-
-            try {
-              set(state => {
-                const itemIndex = state.items.findIndex(item => item.id === id)
-                if (itemIndex === -1) {
-                  throw new Error('Item not found')
-                }
-
-                // Update the item
-                const target = state.items[itemIndex]!
-                Object.assign(target, {
-                  ...updates,
-                  lastModified: new Date()
-                })
-
-                // Recalculate expiration metadata if expiration date changed
-                if (updates.expirationDate !== undefined) {
-                  const updatedItem = state.items[itemIndex]!
-                  const expirationMeta = calculateExpirationMeta(updatedItem)
-                  Object.assign(updatedItem, expirationMeta)
-                }
-
-                ;(state.items[itemIndex] as any).lastUpdated = new Date()
-                state.loading = 'success'
-              })
-
-              await new Promise(resolve => setTimeout(resolve, 200))
-
-            } catch (error) {
-              set({
-                loading: 'error',
-                error: error instanceof Error ? error.message : 'Failed to update item'
-              })
-            }
+          updateItem: async (_id, _updates) => {
+            set({ loading: 'error', error: 'Writes must go through server. Use ProductRepository.' })
           },
 
           // REMOVE ITEM
-          removeItem: async (id) => {
-            set({ loading: 'loading', error: null })
-
-            try {
-              set(state => {
-                const itemIndex = state.items.findIndex(item => item.id === id)
-                if (itemIndex === -1) {
-                  throw new Error('Item not found')
-                }
-
-                state.items.splice(itemIndex, 1)
-                state.loading = 'success'
-              })
-
-              await new Promise(resolve => setTimeout(resolve, 200))
-
-            } catch (error) {
-              set({
-                loading: 'error',
-                error: error instanceof Error ? error.message : 'Failed to remove item'
-              })
-            }
+          removeItem: async (_id) => {
+            set({ loading: 'error', error: 'Writes must go through server. Use ProductRepository.' })
           },
 
           // BULK REMOVE ITEMS
-          bulkRemove: async (ids) => {
-            set({ loading: 'loading', error: null })
-
-            try {
-              set(state => {
-                // Remove all items with matching IDs
-                state.items = state.items.filter(item => !ids.includes(item.id))
-                state.selectedItems = state.selectedItems.filter(id => !ids.includes(id))
-                state.loading = 'success'
-              })
-
-              await new Promise(resolve => setTimeout(resolve, 300))
-
-            } catch (error) {
-              set({
-                loading: 'error',
-                error: error instanceof Error ? error.message : 'Failed to remove items'
-              })
-            }
+          bulkRemove: async (_ids) => {
+            set({ loading: 'error', error: 'Writes must go through server. Use ProductRepository.' })
           },
 
           // FILTERING ACTIONS
@@ -472,11 +373,10 @@ export const usePantryStore = create<PantryState>()(
         storage: createJSONStorage(() => localStorage),
 
         // Version for migration support
-        version: 1,
+        version: 2,
 
-        // Only persist essential data, not computed properties or loading states
+        // Only persist view state; do NOT persist items (Neon is authoritative)
         partialize: (state) => ({
-          items: state.items,
           filters: state.filters,
           sortBy: state.sortBy,
           selectedItems: state.selectedItems,
@@ -485,16 +385,10 @@ export const usePantryStore = create<PantryState>()(
 
         // Migration function for future schema changes
         migrate: (persistedState: any, version: number) => {
-          if (version === 0) {
-            // Migration from version 0 to 1
-            return {
-              ...persistedState,
-              items: persistedState.items.map((item: any) => ({
-                ...item,
-                ...calculateExpirationMeta(item),
-                lastModified: new Date()
-              }))
-            }
+          // Drop any persisted items from prior versions; server is source of truth
+          if (version < 2) {
+            const { items, ...rest } = persistedState || {}
+            return { ...rest }
           }
           return persistedState
         }

@@ -15,7 +15,8 @@ const origin =
         .map((s) => s.trim())
         .filter(Boolean)
 
-app.use(cors({ origin }))
+app.use(cors({ origin, methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'], credentials: false }))
+app.options('*', cors({ origin, methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'], credentials: false }))
 app.use(express.json())
 
 app.get('/', (_req, res) =>
