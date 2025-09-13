@@ -210,11 +210,11 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
                 </label>
                 <input
                   type="number"
-                  min="0.1"
-                  step="0.1"
+                  min="1"
+                  step="1"
                   required
                   value={formData.quantity}
-                  onChange={(e) => handleInputChange('quantity', parseFloat(e.target.value) || 1)}
+                  onChange={(e) => handleInputChange('quantity', Math.max(1, Math.floor(Number(e.target.value) || 1)))}
                   className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
                 />
               </div>

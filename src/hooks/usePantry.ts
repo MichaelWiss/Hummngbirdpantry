@@ -217,7 +217,7 @@ export const usePantrySearch = (debounceMs: number = 300) => {
  * Provides CRUD operations with optimistic updates
  */
 export const usePantryItemOperations = () => {
-  const { addItem, updateItem, removeItem, bulkRemove, loading, error } = usePantry()
+  const { loading, error } = usePantry()
 
   // Create item helper with validation
   const createItem = useCallback(async (itemData: {
@@ -238,32 +238,39 @@ export const usePantryItemOperations = () => {
       throw new Error('Quantity must be greater than 0')
     }
 
-    const newItem = {
-      ...itemData,
+    const { ProductRepository } = await import('@/services/ProductRepository')
+    await ProductRepository.upsert({
+      name: itemData.name.trim(),
+      category: itemData.category,
+      quantity: Math.max(1, Math.floor(itemData.quantity)),
+      unit: itemData.unit,
       purchaseDate: itemData.purchaseDate || new Date(),
-      notes: itemData.notes || '',
-      status: 'fresh' as const,
+      notes: itemData.notes || undefined,
+      status: 'fresh',
       tags: []
-    }
-
-    await addItem(newItem)
-  }, [addItem])
+    } as any)
+  }, [])
 
   // Update item helper
   const modifyItem = useCallback(async (id: ID, updates: Partial<PantryItem>) => {
-    await updateItem(id, updates)
-  }, [updateItem])
+    const { ProductRepository } = await import('@/services/ProductRepository')
+    await ProductRepository.update(id, updates)
+  }, [])
 
   // Delete item helper
   const deleteItem = useCallback(async (id: ID) => {
-    await removeItem(id)
-  }, [removeItem])
+    const { ProductRepository } = await import('@/services/ProductRepository')
+    await ProductRepository.remove(id)
+  }, [])
 
   // Bulk operations
   const deleteSelected = useCallback(async (selectedIds: ID[]) => {
     if (selectedIds.length === 0) return
-    await bulkRemove(selectedIds)
-  }, [bulkRemove])
+    const { ProductRepository } = await import('@/services/ProductRepository')
+    for (const id of selectedIds) {
+      await ProductRepository.remove(id)
+    }
+  }, [])
 
   return {
     // Operations

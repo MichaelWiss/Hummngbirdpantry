@@ -8,12 +8,26 @@ export const apiClient = {
   async request(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', endpoint: string, payload?: any, opts: ApiClientOptions = {}) {
     const base = opts.baseUrl || getBaseUrl()
     if (!base) throw new Error('API base URL not configured')
-    const res = await fetch(new URL(endpoint, base).toString(), {
+    const url = new URL(endpoint, base).toString()
+    const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      mode: 'cors',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       ...(payload !== undefined ? { body: JSON.stringify(payload) } : {})
     })
-    if (!res.ok) throw new Error(`API ${method} ${endpoint} failed: ${res.status}`)
+    if (!res.ok) {
+      let detail: string | undefined
+      try {
+        const text = await res.text()
+        if (text) {
+          try { const data = JSON.parse(text); detail = data.error || data.message || text }
+          catch { detail = text }
+        }
+      } catch { /* ignore */ }
+      const msg = `API ${method} ${endpoint} failed: ${res.status}${detail ? ` - ${detail}` : ''}`
+      throw new Error(msg)
+    }
     // Some endpoints may return no body (e.g., DELETE)
     const text = await res.text()
     if (!text) return undefined
