@@ -15,7 +15,18 @@ import type { Barcode } from '@/types'
 type PermissionName = 'camera' | 'microphone' | 'geolocation' | 'notifications'
 interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void; uiOnly?: boolean }
 
+let activeScannerCount = 0
+
 const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose, uiOnly = false }) => {
+  const [blocked, setBlocked] = useState(false)
+  useEffect(() => {
+    if (activeScannerCount > 0) {
+      setBlocked(true)
+    } else {
+      activeScannerCount++
+    }
+    return () => { activeScannerCount = Math.max(0, activeScannerCount - 1) }
+  }, [])
   const instanceId = React.useRef(Date.now() + Math.random())
   const autoStartedRef = React.useRef(false)
   
@@ -164,6 +175,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
   }
 
   const startScanning = useCallback(async () => {
+    if (blocked) return
     if (uiOnly) return
     if (isScanning || isInitializing) return
     if (!videoRef.current) return
@@ -248,7 +260,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
         onError(`Camera error: ${e?.message || 'Unknown'}`)
       }
     }
-  }, [uiOnly, isScanning, isInitializing, onBarcodeDetected, onError])
+  }, [blocked, uiOnly, isScanning, isInitializing, onBarcodeDetected, onError])
 
   const stopScanning = useCallback(() => {
     setIsScanning(false)
@@ -270,6 +282,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
 
   // Auto-start if permission already granted (restores previous UX)
   useEffect(() => {
+    if (blocked) return
     if (!flagsRef.current.autoStartOnGrant) return
     if (uiOnly) return
     if (autoStartedRef.current) return
@@ -278,7 +291,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
       if (flagsRef.current.verboseDebug) console.debug('[BarcodeScanner] autoStartOnGrant (baseline)')
       startScanning()
     }
-  }, [uiOnly, hasPermission, startScanning])
+  }, [blocked, uiOnly, hasPermission, startScanning])
 
   // Release start guard when scanner becomes active or initialization ends
   // Start guard logic removed
@@ -286,7 +299,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
   // Diagnostics module removed for baseline
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" data-testid="barcode-scanner-modal" data-instance-id={instanceId.current.toString()}>
+    blocked ? null : <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" data-testid="barcode-scanner-modal" data-instance-id={instanceId.current.toString()}>
       <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl">
         <div className="flex items-center justify-between p-4 border-b border-neutral-200">
           <div className="flex items-center space-x-2">
