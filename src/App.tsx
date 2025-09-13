@@ -102,27 +102,28 @@ const App: React.FC = () => {
           }
         }
 
-        // Hydrate pantry from local mirror, then server
+        // Hydrate pantry from Neon first, fallback to local mirror
         await ProductRepository.init()
-        const localItems = await ProductRepository.hydrateFromLocal()
-        usePantryStore.getState().actions.replaceAll(localItems)
-        console.log(`📦 Loaded ${localItems.length} items from local storage`)
-        
         if (baseUrl) {
           try {
-            await ProductRepository.fetchFromServer()
-            // After merging server into local mirror, render the local mirror
-            const merged = await ProductRepository.hydrateFromLocal()
-            usePantryStore.getState().actions.replaceAll(merged)
-            console.log(`🔄 Synced with server, now showing ${merged.length} items`)
+            const serverItems = await ProductRepository.fetchFromServer()
+            usePantryStore.getState().actions.replaceAll(serverItems)
+            console.log(`🔄 Loaded ${serverItems.length} items from server (authoritative)`)          
           } catch (e: any) {
-            console.error('❌ Server fetch failed; using local mirror:', e)
+            console.error('❌ Server fetch failed; falling back to local mirror:', e)
             if (e?.message?.includes('API base URL not configured')) {
               console.error('   → Check VITE_API_BASE_URL environment variable')
             } else if (e?.message?.includes('failed: 4')) {
               console.error('   → Check CORS configuration on server')
             }
+            const localItems = await ProductRepository.hydrateFromLocal()
+            usePantryStore.getState().actions.replaceAll(localItems)
+            console.log(`📦 Loaded ${localItems.length} items from local storage (fallback)`)          
           }
+        } else {
+          const localItems = await ProductRepository.hydrateFromLocal()
+          usePantryStore.getState().actions.replaceAll(localItems)
+          console.log(`📦 Loaded ${localItems.length} items from local storage (no server configured)`)        
         }
 
       } catch (error) {

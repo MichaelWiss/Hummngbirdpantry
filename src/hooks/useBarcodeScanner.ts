@@ -2,7 +2,7 @@
 // Provides comprehensive barcode scanning functionality with error handling
 
 import { useState, useCallback } from 'react'
-import { usePantry } from '@/hooks/usePantry'
+import { ProductRepository } from '@/services/ProductRepository'
 import { BarcodeService } from '@/services/barcode.service'
 import type { Barcode, PantryItem, ItemCategory, MeasurementUnit } from '@/types'
 
@@ -18,7 +18,6 @@ interface BarcodeScannerState {
 }
 
 export const useBarcodeScanner = () => {
-  const { addItem } = usePantry()
 
   const [state, setState] = useState<BarcodeScannerState>({
     isScanning: false,
@@ -116,14 +115,14 @@ export const useBarcodeScanner = () => {
     try {
       console.log('⚡ Quick adding scanned item:', productData.name)
 
-      await addItem({
+      await ProductRepository.upsert({
         name: productData.name || 'Unknown Product',
-        category: productData.category || 'other',
+        category: (productData.category || 'other') as ItemCategory,
         quantity,
-        unit: productData.unit || 'pieces',
+        unit: (productData.unit || 'pieces') as MeasurementUnit,
         barcode,
-        brand: productData.brand
-      })
+        ...(productData.brand ? { brand: productData.brand } : {})
+      } as any)
 
       // Clear state after successful addition
       setState(prev => ({
@@ -146,7 +145,7 @@ export const useBarcodeScanner = () => {
 
       throw error
     }
-  }, [addItem])
+  }, [])
 
   // Add scanned item with custom details
   const addScannedItemWithDetails = useCallback(async (
@@ -162,14 +161,14 @@ export const useBarcodeScanner = () => {
     try {
       console.log('📝 Adding scanned item with custom details')
 
-      await addItem({
+      await ProductRepository.upsert({
         name: customData.name || 'Scanned Product',
-        category: customData.category || 'other',
+        category: (customData.category || 'other') as ItemCategory,
         quantity: customData.quantity || 1,
-        unit: customData.unit || 'pieces',
+        unit: (customData.unit || 'pieces') as MeasurementUnit,
         barcode,
-        notes: customData.notes
-      })
+        ...(customData.notes ? { notes: customData.notes } : {})
+      } as any)
 
       // Clear state after successful addition
       setState(prev => ({
@@ -192,7 +191,7 @@ export const useBarcodeScanner = () => {
 
       throw error
     }
-  }, [addItem])
+  }, [])
 
   // Start scanning
   const startScanning = useCallback(() => {
