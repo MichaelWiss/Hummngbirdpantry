@@ -13,11 +13,11 @@ import type { Barcode } from '@/types'
 // Simplified baseline: direct getUserMedia + continuous decode; prior layered logic removed for stability.
 
 type PermissionName = 'camera' | 'microphone' | 'geolocation' | 'notifications'
-interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void; uiOnly?: boolean }
+interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void; uiOnly?: boolean; initialStream?: MediaStream; startOnMount?: boolean }
 
 let activeScannerCount = 0
 
-const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose, uiOnly = false }) => {
+const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose, uiOnly = false, initialStream, startOnMount }) => {
   const [blocked, setBlocked] = useState(false)
   useEffect(() => {
     if (activeScannerCount > 0) {
@@ -107,23 +107,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
     }
   }
 
-  useEffect(() => {
-    const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
-    const insecure = !window.isSecureContext && !isLocalHost
-    if (insecure) setNeedsSecureContext(true)
-    checkCameraPermission().then(state => {
-      if (state === 'denied') { setHasPermission(false); setPermissionInstructions(getBrowserInstructions()) }
-      else if (state === 'granted') setHasPermission(true)
-      else if (state === 'prompt') setHasPermission(null)
-    })
-    // Auto-request camera and start scanning on first mount for single-tap UX
-    ;(async () => {
-      const stream = await requestCameraPermission()
-      if (stream) startScanning()
-    })()
-  }, [])
+  // moved below after function declarations to satisfy hooks/hoisting
 
-  const requestCameraPermission = async () => {
+  const requestCameraPermission = useCallback(async () => {
     if (uiOnly) {
       return null
     }
@@ -167,7 +153,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
       }
       return null
     }
-  }
+  }, [onError, uiOnly])
 
   const getBrowserInstructions = () => {
     const ua = navigator.userAgent.toLowerCase()
@@ -297,6 +283,24 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
       startScanning()
     }
   }, [blocked, uiOnly, hasPermission, startScanning])
+
+  // Initial mount: bind provided stream or request permission and start
+  useEffect(() => {
+    const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
+    const insecure = !window.isSecureContext && !isLocalHost
+    if (insecure) setNeedsSecureContext(true)
+    checkCameraPermission().then(state => {
+      if (state === 'denied') { setHasPermission(false); setPermissionInstructions(getBrowserInstructions()) }
+      else if (state === 'granted') setHasPermission(true)
+      else if (state === 'prompt') setHasPermission(null)
+    })
+    if (initialStream && videoRef.current) {
+      videoRef.current.srcObject = initialStream
+      setTimeout(() => { if (startOnMount) startScanning() }, 0)
+    } else if (startOnMount) {
+      (async () => { const stream = await requestCameraPermission(); if (stream) startScanning() })()
+    }
+  }, [initialStream, startOnMount, requestCameraPermission, startScanning])
 
   // Release start guard when scanner becomes active or initialization ends
   // Start guard logic removed
