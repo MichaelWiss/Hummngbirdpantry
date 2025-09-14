@@ -11,6 +11,7 @@ import CategoryList from '@/components/pantry/CategoryList'
 import CategoryItems from '@/components/pantry/CategoryItems'
 import BarcodeScanner from '@/components/barcode/BarcodeScanner'
 import { ScannerProvider, useScanner } from '@/components/barcode/ScannerProvider'
+import { getApiBaseUrl } from '@/services/apiClient'
 import AddItemModal from '@/components/pantry/AddItemModal'
 // Removed demo page from navigation
 
@@ -30,8 +31,6 @@ const App: React.FC = () => {
     notes: string
   }> | undefined>(undefined)
 
-  // Prevent double scanner overlays across rapid taps/renders
-  const scannerOpenRef = React.useRef(false)
   const scannerCtx = (() => { try { return (useScanner as any)() } catch { return null } })()
   const openScanner = React.useCallback(() => {
     if (scannerCtx) {
@@ -69,14 +68,7 @@ const App: React.FC = () => {
       })
       return
     }
-    if (scannerOpenRef.current) return
-    scannerOpenRef.current = true
-    setShowAddItemModal(false)
-    setShowBarcodeScanner(true)
   }, [scannerCtx])
-  React.useEffect(() => {
-    if (!showBarcodeScanner) scannerOpenRef.current = false
-  }, [showBarcodeScanner])
 
   // Dev-only: filter a benign ZXing / video element warning that can appear once during
   // stream handoff ("Trying to play video that is already playing."). This prevents
@@ -121,7 +113,7 @@ const App: React.FC = () => {
         console.log('🔄 Background sync service started')
 
         // Check API connectivity first
-        const baseUrl = (import.meta as any).env?.VITE_API_BASE_URL
+        const baseUrl = getApiBaseUrl()
         if (!baseUrl) {
           console.error('❌ VITE_API_BASE_URL not configured - running in local-only mode')
         } else {
@@ -144,7 +136,7 @@ const App: React.FC = () => {
 
         // Hydrate pantry from Neon first, fallback to local mirror
         await ProductRepository.init()
-        if (baseUrl) {
+        if (getApiBaseUrl()) {
           try {
             const serverItems = await ProductRepository.fetchFromServer()
             usePantryStore.getState().actions.replaceAll(serverItems)

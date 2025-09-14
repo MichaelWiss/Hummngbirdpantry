@@ -116,6 +116,11 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
       else if (state === 'granted') setHasPermission(true)
       else if (state === 'prompt') setHasPermission(null)
     })
+    // Auto-request camera and start scanning on first mount for single-tap UX
+    ;(async () => {
+      const stream = await requestCameraPermission()
+      if (stream) startScanning()
+    })()
   }, [])
 
   const requestCameraPermission = async () => {
