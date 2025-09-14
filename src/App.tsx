@@ -19,6 +19,7 @@ const App: React.FC = () => {
   const [showAddItemModal, setShowAddItemModal] = React.useState(false)
   const [currentView, setCurrentView] = React.useState<'pantry' | 'categories' | 'categoryItems'>('pantry')
   const [activeCategory, setActiveCategory] = React.useState<ItemCategory | null>(null)
+  const [dbOk, setDbOk] = React.useState<boolean | null>(null)
   const [addItemInitialData, setAddItemInitialData] = React.useState<Partial<{
     name: string
     category: ItemCategory
@@ -91,14 +92,19 @@ const App: React.FC = () => {
           console.error('❌ VITE_API_BASE_URL not configured - running in local-only mode')
         } else {
           try {
-            const healthCheck = await fetch(`${baseUrl}/health`)
+            const healthCheck = await fetch(`${baseUrl}/health`, { cache: 'no-store' })
             if (healthCheck.ok) {
-              console.log('✅ API server connected:', baseUrl)
+              const j = await healthCheck.json()
+              setDbOk(!!j?.dbOk)
+              if (j?.dbOk) console.log('✅ API server + DB connected:', baseUrl)
+              else console.error('❌ API server reachable but DB not connected')
             } else {
               console.error('❌ API server unhealthy:', healthCheck.status, healthCheck.statusText)
+              setDbOk(false)
             }
           } catch (healthError) {
             console.error('❌ API server unreachable:', healthError)
+            setDbOk(false)
           }
         }
 
@@ -166,6 +172,15 @@ const App: React.FC = () => {
       </main>
 
       {/* Modals */}
+      {dbOk === false && (
+        <div className="fixed top-0 inset-x-0 z-50">
+          <div className="mx-auto max-w-7xl px-4 py-2">
+            <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-3 text-sm">
+              Neon database not reachable. Changes will not persist.
+            </div>
+          </div>
+        </div>
+      )}
       {showBarcodeScanner && (
         <BarcodeScanner
           onBarcodeDetected={async (barcode) => {

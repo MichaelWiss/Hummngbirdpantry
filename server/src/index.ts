@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
-import { migrate } from './db.js'
+import { migrate, pool } from './db.js'
 import { products } from './routes/products.js'
 
 const app = express()
@@ -30,7 +30,15 @@ app.get('/', (_req, res) =>
   })
 )
 
-app.get('/health', (_req, res) => res.json({ ok: true }))
+app.get('/health', async (_req, res) => {
+  try {
+    const r = await pool.query('select 1')
+    res.json({ ok: true, dbOk: r.rowCount === 1 })
+  } catch (err: any) {
+    console.error('[server] health db check failed:', err?.message || err)
+    res.json({ ok: true, dbOk: false })
+  }
+})
 app.use('/api/products', products)
 
 void (async () => {

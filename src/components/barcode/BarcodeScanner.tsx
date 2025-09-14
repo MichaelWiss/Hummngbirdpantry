@@ -242,7 +242,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
               return
             }
             // defer stopping to after callback to avoid hook order issues
-            try { onBarcodeDetected(normalized as Barcode) } catch {/* ignore */}
+            try { onBarcodeDetected(normalized as Barcode) } catch (e) { console.error('onBarcodeDetected error:', e) }
             setTimeout(() => { try { stopScanning() } catch {/* ignore */} }, 0)
           }
         } else if (err && !(err instanceof NotFoundException)) {

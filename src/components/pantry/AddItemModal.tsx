@@ -76,9 +76,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
 
       console.log('✅ Item added successfully:', formData.name)
       onClose()
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Failed to add item:', error)
-      alert('Failed to add item. Please try again.')
+      alert(error?.message || 'Failed to add item. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
