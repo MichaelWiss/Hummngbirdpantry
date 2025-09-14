@@ -35,22 +35,40 @@ const App: React.FC = () => {
   const openScanner = React.useCallback(() => {
     if (scannerCtx) {
       scannerCtx.open(async (barcode) => {
-        // Reuse existing onBarcodeDetected flow
+        // Minimal, server-first flow
         try {
+          const base = getApiBaseUrl()
           const { ProductRepository } = await import('@/services/ProductRepository')
           const { BarcodeService } = await import('@/services/barcode.service')
           const { fetchProductByBarcode } = await import('@/services/openFoodFacts.service')
-          const current = await ProductRepository.getByBarcode(barcode)
-          if (current) {
-            try { await ProductRepository.increment(barcode, 1) } catch (e) { console.warn('Increment failed:', e) }
-            return
-          }
           const { pantryApi } = await import('@/services/pantryApi.service')
-          const serverItem = await pantryApi.getByBarcode(barcode)
-          if (serverItem) {
-            try { await ProductRepository.increment(barcode, 1) } catch (e) { console.error('Server increment failed:', e) }
-            return
+
+          // If we already have it locally, try server increment first; form on failure
+          const localExisting = await ProductRepository.getByBarcode(barcode)
+          if (localExisting && base && dbOk) {
+            try {
+              await ProductRepository.increment(barcode, 1)
+              return
+            } catch (err) {
+              console.error('Increment failed; opening form:', err)
+            }
           }
+
+          // Lookup on server first if API available
+          let serverItem: any = null
+          if (base && dbOk) {
+            serverItem = await pantryApi.getByBarcode(barcode)
+            if (serverItem) {
+              try {
+                await ProductRepository.increment(barcode, 1)
+                return
+              } catch (err) {
+                console.error('Server increment failed; opening form:', err)
+              }
+            }
+          }
+
+          // Prefill from local cache/mock/OFF and open form
           let prefill = await BarcodeService.lookupProduct(barcode)
           if (!prefill) {
             const off = await fetchProductByBarcode(barcode)
@@ -64,7 +82,11 @@ const App: React.FC = () => {
             setAddItemInitialData({ barcode })
             setShowAddItemModal(true)
           }
-        } catch (e) { console.error('Scanner pipeline failed:', e) }
+        } catch (e) {
+          console.error('Scanner pipeline failed:', e)
+          setAddItemInitialData({ barcode })
+          setShowAddItemModal(true)
+        }
       })
       return
     }
@@ -100,17 +122,12 @@ const App: React.FC = () => {
       try {
         // Import cache services dynamically to avoid circular dependencies
         const { BarcodeService } = await import('@/services/barcode.service')
-        const { initializeBackgroundSync } = await import('@/services/backgroundSync.service')
         const { ProductRepository } = await import('@/services/ProductRepository')
         const { usePantryStore } = await import('@/stores/pantry.store')
 
         // Initialize cache system
         await BarcodeService.initializeCache()
         console.log('🚀 App initialized with barcode cache support')
-
-        // Initialize background sync
-        await initializeBackgroundSync()
-        console.log('🔄 Background sync service started')
 
         // Check API connectivity first
         const baseUrl = getApiBaseUrl()
