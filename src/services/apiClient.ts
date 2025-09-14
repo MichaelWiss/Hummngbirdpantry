@@ -2,7 +2,25 @@ export interface ApiClientOptions {
   baseUrl?: string
 }
 
-const getBaseUrl = () => (import.meta as any).env?.VITE_API_BASE_URL as string | undefined
+const getBaseUrl = () => {
+  const envVal = (import.meta as any).env?.VITE_API_BASE_URL as string | undefined
+  if (envVal) return envVal
+  try {
+    const ls = typeof localStorage !== 'undefined' ? localStorage.getItem('API_BASE_URL') || undefined : undefined
+    if (ls) return ls
+  } catch { /* ignore */ }
+  try {
+    const meta = typeof document !== 'undefined' ? document.querySelector('meta[name="api-base-url"]')?.getAttribute('content') || undefined : undefined
+    if (meta) return meta
+  } catch { /* ignore */ }
+  try {
+    const win = (globalThis as any)
+    if (win && win.__API_BASE_URL__) return win.__API_BASE_URL__ as string
+  } catch { /* ignore */ }
+  return undefined
+}
+
+export const getApiBaseUrl = getBaseUrl
 
 export const apiClient = {
   async request(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', endpoint: string, payload?: any, opts: ApiClientOptions = {}) {

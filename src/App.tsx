@@ -10,6 +10,7 @@ import PantryView from '@/components/pantry/PantryView'
 import CategoryList from '@/components/pantry/CategoryList'
 import CategoryItems from '@/components/pantry/CategoryItems'
 import BarcodeScanner from '@/components/barcode/BarcodeScanner'
+import { ScannerProvider, useScanner } from '@/components/barcode/ScannerProvider'
 import AddItemModal from '@/components/pantry/AddItemModal'
 // Removed demo page from navigation
 
@@ -31,15 +32,48 @@ const App: React.FC = () => {
 
   // Prevent double scanner overlays across rapid taps/renders
   const scannerOpenRef = React.useRef(false)
+  const scannerCtx = (() => { try { return (useScanner as any)() } catch { return null } })()
   const openScanner = React.useCallback(() => {
-    if (scannerOpenRef.current) {
-      console.log('Scanner already open or opening, ignoring request.')
+    if (scannerCtx) {
+      scannerCtx.open(async (barcode) => {
+        // Reuse existing onBarcodeDetected flow
+        try {
+          const { ProductRepository } = await import('@/services/ProductRepository')
+          const { BarcodeService } = await import('@/services/barcode.service')
+          const { fetchProductByBarcode } = await import('@/services/openFoodFacts.service')
+          const current = await ProductRepository.getByBarcode(barcode)
+          if (current) {
+            try { await ProductRepository.increment(barcode, 1) } catch (e) { console.warn('Increment failed:', e) }
+            return
+          }
+          const { pantryApi } = await import('@/services/pantryApi.service')
+          const serverItem = await pantryApi.getByBarcode(barcode)
+          if (serverItem) {
+            try { await ProductRepository.increment(barcode, 1) } catch (e) { console.error('Server increment failed:', e) }
+            return
+          }
+          let prefill = await BarcodeService.lookupProduct(barcode)
+          if (!prefill) {
+            const off = await fetchProductByBarcode(barcode)
+            if (off.found && off.data) prefill = off.data
+          }
+          if (prefill) {
+            const init = { name: prefill.name!, category: prefill.category as ItemCategory, quantity: 1, unit: 'pieces' as MeasurementUnit, barcode }
+            setAddItemInitialData(init)
+            setShowAddItemModal(true)
+          } else {
+            setAddItemInitialData({ barcode })
+            setShowAddItemModal(true)
+          }
+        } catch (e) { console.error('Scanner pipeline failed:', e) }
+      })
       return
     }
+    if (scannerOpenRef.current) return
     scannerOpenRef.current = true
     setShowAddItemModal(false)
     setShowBarcodeScanner(true)
-  }, [])
+  }, [scannerCtx])
   React.useEffect(() => {
     if (!showBarcodeScanner) scannerOpenRef.current = false
   }, [showBarcodeScanner])
@@ -181,7 +215,7 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      {showBarcodeScanner && (
+      {showBarcodeScanner && !scannerCtx && (
         <BarcodeScanner
           onBarcodeDetected={async (barcode) => {
             try {

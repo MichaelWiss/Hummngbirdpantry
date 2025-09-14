@@ -4,6 +4,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import { ScannerProvider } from '@/components/barcode/ScannerProvider'
 
 // Import global styles - this includes Tailwind CSS and custom styles
 import './assets/styles/index.css'
@@ -24,6 +25,8 @@ const root = ReactDOM.createRoot(rootElement)
 // Strict mode helps identify unsafe lifecycles, legacy API usage, and other problems
 root.render(
   <React.StrictMode>
-    <App />
+    <ScannerProvider>
+      <App />
+    </ScannerProvider>
   </React.StrictMode>
 )
