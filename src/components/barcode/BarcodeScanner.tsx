@@ -13,10 +13,10 @@ import type { Barcode } from '@/types'
 // Simplified baseline: direct getUserMedia + continuous decode; prior layered logic removed for stability.
 
 type PermissionName = 'camera' | 'microphone' | 'geolocation' | 'notifications'
-interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void; uiOnly?: boolean; initialStream?: MediaStream; startOnMount?: boolean }
+interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void; uiOnly?: boolean; startOnMount?: boolean }
 
 // ScannerProvider ensures singleton - no component-level guards needed
-const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose, uiOnly = false, initialStream, startOnMount }) => {
+const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose, uiOnly = false, startOnMount }) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
@@ -25,6 +25,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
   const streamRef = useRef<MediaStream | null>(null)
   const recentResultsRef = useRef<{ text: string; ts: number }[]>([])
   const acceptedRef = useRef(false)
+  const autoStartedRef = useRef(false)
 
   // --- UPC/EAN normalization and checksum validation helpers ---
   const isDigitsOnly = (s: string) => /^\d+$/.test(s)
@@ -244,7 +245,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
         onError(`Camera error: ${e?.message || 'Unknown'}`)
       }
     }
-  }, [uiOnly, isScanning, isInitializing, onBarcodeDetected, onError])
+  }, [uiOnly, isScanning, isInitializing, onBarcodeDetected, onError]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const stopScanning = useCallback(() => {
     setIsScanning(false)
@@ -286,13 +287,10 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
       else if (state === 'granted') setHasPermission(true)
       else if (state === 'prompt') setHasPermission(null)
     })
-    if (initialStream && videoRef.current) {
-      videoRef.current.srcObject = initialStream
-      setTimeout(() => { if (startOnMount) startScanning() }, 0)
-    } else if (startOnMount) {
+    if (startOnMount) {
       (async () => { const stream = await requestCameraPermission(); if (stream) startScanning() })()
     }
-  }, [initialStream, startOnMount, requestCameraPermission, startScanning])
+  }, [startOnMount, requestCameraPermission, startScanning])
 
   // Release start guard when scanner becomes active or initialization ends
   // Start guard logic removed

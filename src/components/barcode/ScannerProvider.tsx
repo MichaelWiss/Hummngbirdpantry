@@ -25,28 +25,11 @@ export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (openingRef.current || visible) return
     openingRef.current = true
     try {
-      // Acquire camera stream synchronously within user gesture
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280, min: 640 },
-          height: { ideal: 720, min: 480 },
-          frameRate: { ideal: 30, min: 15 }
-        }
-      }
-      try {
-        streamRef.current = await navigator.mediaDevices.getUserMedia(constraints)
-      } catch (err: any) {
-        // Fallback constraints
-        const fallback: MediaStreamConstraints = {
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 15 } }
-        }
-        streamRef.current = await navigator.mediaDevices.getUserMedia(fallback)
-      }
+      // Let BarcodeScanner handle getUserMedia to avoid stream conflicts
       onDetectedRef.current = onDetected
       setVisible(true)
     } catch (e) {
-      console.error('ScannerProvider.open getUserMedia failed:', e)
+      console.error('ScannerProvider.open failed:', e)
     } finally {
       // release opening latch next tick
       setTimeout(() => { openingRef.current = false }, 0)
@@ -56,11 +39,7 @@ export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const close = React.useCallback(() => {
     setVisible(false)
     onDetectedRef.current = null
-    // Release camera
-    const s = streamRef.current
-    if (s) {
-      try { s.getTracks().forEach(t => t.stop()) } catch { /* ignore */ }
-    }
+    // BarcodeScanner handles its own stream cleanup
     streamRef.current = null
   }, [])
 
@@ -69,7 +48,6 @@ export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       {children}
       {visible && (
         <BarcodeScanner
-          initialStream={streamRef.current || undefined}
           startOnMount={true}
           onBarcodeDetected={(b) => { try { onDetectedRef.current?.(b) } finally { close() } }}
           onError={() => close()}
