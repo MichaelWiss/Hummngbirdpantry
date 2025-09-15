@@ -117,26 +117,47 @@ const App: React.FC = () => {
 
         console.log('🚀 App initializing...')
 
-        // Check API connectivity first
+        // Check API connectivity first with enhanced monitoring
         const baseUrl = getApiBaseUrl()
         if (!baseUrl) {
           console.error('❌ VITE_API_BASE_URL not configured - running in local-only mode')
+          setDbOk(false)
         } else {
-          try {
-            const healthCheck = await fetch(`${baseUrl}/health`, { cache: 'no-store' })
-            if (healthCheck.ok) {
-              const j = await healthCheck.json()
-              setDbOk(!!j?.dbOk)
-              if (j?.dbOk) console.log('✅ API server + DB connected:', baseUrl)
-              else console.error('❌ API server reachable but DB not connected')
-            } else {
-              console.error('❌ API server unhealthy:', healthCheck.status, healthCheck.statusText)
-              setDbOk(false)
+          const checkHealthWithRetry = async (maxAttempts = 3): Promise<boolean> => {
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              try {
+                const healthCheck = await fetch(`${baseUrl}/health`, { 
+                  cache: 'no-store',
+                  signal: AbortSignal.timeout(5000) // 5s timeout
+                })
+                if (healthCheck.ok) {
+                  const j = await healthCheck.json()
+                  const isHealthy = !!j?.dbOk
+                  if (isHealthy) {
+                    console.log('✅ API server + DB connected:', baseUrl)
+                  } else {
+                    console.error('❌ API server reachable but DB not connected')
+                  }
+                  return isHealthy
+                } else {
+                  throw new Error(`HTTP ${healthCheck.status}`)
+                }
+              } catch (healthError) {
+                if (attempt < maxAttempts) {
+                  const delay = 1000 * attempt // 1s, 2s, 3s
+                  console.warn(`Health check attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms:`, (healthError as Error).message)
+                  await new Promise(resolve => setTimeout(resolve, delay))
+                } else {
+                  console.error('❌ API server unreachable after retries:', healthError)
+                  return false
+                }
+              }
             }
-          } catch (healthError) {
-            console.error('❌ API server unreachable:', healthError)
-            setDbOk(false)
+            return false
           }
+          
+          const isHealthy = await checkHealthWithRetry()
+          setDbOk(isHealthy)
         }
 
         // Hydrate pantry from Neon first, fallback to local mirror
@@ -172,6 +193,41 @@ const App: React.FC = () => {
     initializeApp()
   }, [])
 
+  // Periodic health monitoring (every 30 seconds)
+  React.useEffect(() => {
+    if (!getApiBaseUrl()) return
+    
+    const monitorHealth = async () => {
+      try {
+        const baseUrl = getApiBaseUrl()
+        if (!baseUrl) return
+        
+        const healthCheck = await fetch(`${baseUrl}/health`, { 
+          cache: 'no-store',
+          signal: AbortSignal.timeout(3000) // 3s timeout for background checks
+        })
+        
+        if (healthCheck.ok) {
+          const j = await healthCheck.json()
+          const isHealthy = !!j?.dbOk
+          setDbOk(isHealthy)
+          if (!isHealthy) {
+            console.warn('⚠️ Background health check: DB not connected')
+          }
+        } else {
+          setDbOk(false)
+          console.warn('⚠️ Background health check failed:', healthCheck.status)
+        }
+      } catch (error) {
+        setDbOk(false)
+        console.warn('⚠️ Background health check error:', (error as Error).message)
+      }
+    }
+    
+    const interval = setInterval(monitorHealth, 30000) // Check every 30s
+    return () => clearInterval(interval)
+  }, [])
+
   // Camera diagnostic function removed (unused)
 
   // Modal trigger functions (inline in navigation)
@@ -202,12 +258,30 @@ const App: React.FC = () => {
         {/* demo view removed */}
       </main>
 
-      {/* Modals */}
+      {/* Enhanced Neon connectivity banner */}
       {dbOk === false && (
         <div className="fixed top-0 inset-x-0 z-50">
           <div className="mx-auto max-w-7xl px-4 py-2">
-            <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-3 text-sm">
-              Neon database not reachable. Changes will not persist.
+            <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-3 text-sm flex items-center justify-between">
+              <div>
+                <strong>Neon database not reachable.</strong> Changes will not persist until connection is restored.
+                <div className="text-xs mt-1 text-red-600">Check your internet connection or try again later.</div>
+              </div>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="text-red-800 hover:text-red-900 underline text-xs ml-4"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {dbOk === null && (
+        <div className="fixed top-0 inset-x-0 z-50">
+          <div className="mx-auto max-w-7xl px-4 py-2">
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg px-4 py-3 text-sm">
+              <strong>Checking Neon database connection...</strong>
             </div>
           </div>
         </div>

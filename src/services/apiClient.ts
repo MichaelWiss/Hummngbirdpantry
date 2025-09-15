@@ -22,38 +22,99 @@ const getBaseUrl = () => {
 
 export const getApiBaseUrl = getBaseUrl
 
+const generateIdempotencyKey = () => {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    // Fallback for older browsers
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  }
+}
+
 export const apiClient = {
   async request(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', endpoint: string, payload?: any, opts: ApiClientOptions = {}) {
     const base = opts.baseUrl || getBaseUrl()
     if (!base) throw new Error('API base URL not configured')
     const url = new URL(endpoint, base).toString()
-    const res = await fetch(url, {
-      method,
-      mode: 'cors',
-      cache: 'no-store',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      ...(payload !== undefined ? { body: JSON.stringify(payload) } : {})
-    })
-    if (!res.ok) {
-      let detail: string | undefined
+    
+    const maxRetries = 3
+    const baseDelay = 500 // 500ms
+    const needsIdempotency = ['POST', 'PUT', 'PATCH'].includes(method)
+    const idempotencyKey = needsIdempotency ? generateIdempotencyKey() : undefined
+    
+    let lastError: Error | undefined
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const text = await res.text()
-        if (text) {
-          try { const data = JSON.parse(text); detail = data.error || data.message || text }
-          catch { detail = text }
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
-      } catch { /* ignore */ }
-      const msg = `API ${method} ${endpoint} failed: ${res.status}${detail ? ` - ${detail}` : ''}`
-      throw new Error(msg)
+        
+        if (idempotencyKey) {
+          headers['x-idempotency-key'] = idempotencyKey
+        }
+        
+        const res = await fetch(url, {
+          method,
+          mode: 'cors',
+          cache: 'no-store',
+          headers,
+          ...(payload !== undefined ? { body: JSON.stringify(payload) } : {})
+        })
+        
+        if (!res.ok) {
+          let detail: string | undefined
+          try {
+            const text = await res.text()
+            if (text) {
+              try { const data = JSON.parse(text); detail = data.error || data.message || text }
+              catch { detail = text }
+            }
+          } catch { /* ignore */ }
+          
+          const error = new Error(`API ${method} ${endpoint} failed: ${res.status}${detail ? ` - ${detail}` : ''}`)
+          
+          // Don't retry client errors (4xx) except 408 (timeout)
+          if (res.status >= 400 && res.status < 500 && res.status !== 408) {
+            throw error
+          }
+          
+          // Retry server errors (5xx) and network issues
+          if (attempt < maxRetries) {
+            lastError = error
+            const delay = baseDelay * Math.pow(2, attempt - 1) // Exponential backoff
+            console.warn(`API retry ${attempt}/${maxRetries} after ${delay}ms:`, error.message)
+            await new Promise(resolve => setTimeout(resolve, delay))
+            continue
+          }
+          
+          throw error
+        }
+        
+        // Success - return response
+        const text = await res.text()
+        if (!text) return undefined
+        try {
+          return JSON.parse(text)
+        } catch {
+          return undefined
+        }
+      } catch (error) {
+        // Network error or fetch failed
+        if (attempt < maxRetries) {
+          lastError = error as Error
+          const delay = baseDelay * Math.pow(2, attempt - 1)
+          console.warn(`API retry ${attempt}/${maxRetries} after ${delay}ms:`, (error as Error).message)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
+        }
+        throw error
+      }
     }
-    // Some endpoints may return no body (e.g., DELETE)
-    const text = await res.text()
-    if (!text) return undefined
-    try {
-      return JSON.parse(text)
-    } catch {
-      return undefined
-    }
+    
+    // This should never be reached, but TypeScript needs it
+    throw lastError || new Error('Max retries exceeded')
   },
   async get<T = any>(endpoint: string, opts: ApiClientOptions = {}) {
     return this.request('GET', endpoint, undefined, opts) as Promise<T>

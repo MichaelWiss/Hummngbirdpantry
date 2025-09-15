@@ -23,6 +23,7 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
   const { create } = usePantryActions()
 
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [autofillStatus, setAutofillStatus] = useState<'none' | 'loading' | 'found' | 'not-found'>('none')
 
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
@@ -49,7 +50,69 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
       console.log('🔄 AddItemModal: New form data:', newData)
       return newData
     })
+    setAutofillStatus(initialData.name ? 'found' : 'none')
   }, [initialData])
+
+  // Enhanced autofill: Try NeonDB first, then local storage for barcode lookups
+  const tryAutofillFromBarcode = React.useCallback(async (barcode: string) => {
+    if (!barcode.trim()) return
+    
+    setAutofillStatus('loading')
+    try {
+      const { ProductRepository } = await import('@/services/ProductRepository')
+      // Try NeonDB first (via server)
+      const existingItem = await ProductRepository.getByBarcode(barcode as Barcode)
+      
+      if (existingItem) {
+        console.log('✅ Found existing item in NeonDB:', existingItem.name)
+        setFormData(prev => ({
+          ...prev,
+          name: existingItem.name,
+          category: existingItem.category,
+          unit: existingItem.unit,
+          ...(existingItem.brand ? { notes: `Brand: ${existingItem.brand}` } : {}),
+          quantity: 1 // Always default to 1 for new additions
+        }))
+        setAutofillStatus('found')
+      } else {
+        console.log('ℹ️ Item not found in NeonDB, checking product lookup')
+        // Fall back to external product lookup
+        try {
+          const { lookupProductByBarcode } = await import('@/services/productLookup')
+          const productData = await lookupProductByBarcode(barcode as Barcode)
+          
+          if (productData) {
+            console.log('✅ Found product via lookup:', productData.name)
+            setFormData(prev => ({
+              ...prev,
+              name: productData.name,
+              category: productData.category,
+              unit: 'pieces' as MeasurementUnit,
+              ...(productData.brand ? { notes: `Brand: ${productData.brand}` } : {}),
+              quantity: 1
+            }))
+            setAutofillStatus('found')
+          } else {
+            setAutofillStatus('not-found')
+          }
+        } catch (lookupError) {
+          console.warn('Product lookup failed:', lookupError)
+          setAutofillStatus('not-found')
+        }
+      }
+    } catch (error) {
+      console.error('Autofill failed:', error)
+      setAutofillStatus('not-found')
+    }
+  }, [])
+
+  // Trigger autofill when barcode changes
+  React.useEffect(() => {
+    if (formData.barcode && !initialData?.name) {
+      // Only autofill if we don't already have initial data and barcode is present
+      tryAutofillFromBarcode(formData.barcode)
+    }
+  }, [formData.barcode, tryAutofillFromBarcode, initialData?.name])
 
   // Barcode handling is centralized; this modal requests scanner via onOpenScanner
 
@@ -77,7 +140,15 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
       onClose()
     } catch (error: any) {
       console.error('❌ Failed to add item:', error)
-      alert(error?.message || 'Failed to add item. Please try again.')
+      // Enhanced error messages that don't prevent saving
+      const errorMessage = error?.message || 'Failed to add item'
+      if (errorMessage.includes('saved locally')) {
+        // This is actually a success with a warning
+        alert(`Item saved! ${errorMessage}`)
+        onClose() // Still close the modal
+      } else {
+        alert(`Error: ${errorMessage}. Please try again.`)
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -107,16 +178,32 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
             </button>
           </div>
 
-          {/* Success message for prefilled products */}
-          {initialData?.name && (
+          {/* Enhanced success message for autofilled products */}
+          {autofillStatus === 'found' && formData.name && (
             <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
               <div className="flex items-center space-x-2 mb-2">
                 <CheckCircle className="w-5 h-5 text-green-600" />
                 <span className="font-medium text-green-800">Product Found!</span>
               </div>
               <p className="text-green-700 text-sm">
-                &quot;{initialData.name}&quot; has been auto-filled below.
+                &quot;{formData.name}&quot; has been auto-filled from {initialData?.name ? 'your scan' : 'NeonDB'}.
                 Review and adjust the details as needed.
+              </p>
+            </div>
+          )}
+          
+          {autofillStatus === 'loading' && (
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-blue-700 text-sm">
+                🔍 Looking up product details...
+              </p>
+            </div>
+          )}
+          
+          {autofillStatus === 'not-found' && formData.barcode && (
+            <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-yellow-700 text-sm">
+                ⚠️ Product not found in database. Please fill in the details manually.
               </p>
             </div>
           )}
@@ -144,20 +231,36 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
                 <label className="block text-sm font-medium text-neutral-700">
                   Barcode (Optional)
                 </label>
-                <button
-                  type="button"
-                  onClick={() => { onClose(); onOpenScanner && onOpenScanner() }}
-                  className="flex items-center space-x-2 bg-primary-50 hover:bg-primary-100 text-primary-700 px-3 py-1 rounded-lg text-sm font-medium transition-colors"
-                >
-                  <Scan size={16} />
-                  <span>Scan</span>
-                </button>
+                <div className="flex space-x-2">
+                  {formData.barcode && (
+                    <button
+                      type="button"
+                      onClick={() => tryAutofillFromBarcode(formData.barcode)}
+                      disabled={autofillStatus === 'loading'}
+                      className="flex items-center space-x-1 bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50"
+                    >
+                      <span>🔍</span>
+                      <span>{autofillStatus === 'loading' ? 'Looking up...' : 'Lookup'}</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { onClose(); onOpenScanner && onOpenScanner() }}
+                    className="flex items-center space-x-2 bg-primary-50 hover:bg-primary-100 text-primary-700 px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <Scan size={16} />
+                    <span>Scan</span>
+                  </button>
+                </div>
               </div>
 
               <input
                 type="text"
                 value={formData.barcode}
-                onChange={(e) => handleInputChange('barcode', e.target.value)}
+                onChange={(e) => {
+                  handleInputChange('barcode', e.target.value)
+                  if (!e.target.value) setAutofillStatus('none')
+                }}
                 placeholder="Enter barcode manually or scan"
                 className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
               />

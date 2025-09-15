@@ -6,10 +6,10 @@ import type { PantryItem, ID, ItemCategory, MeasurementUnit } from '@/types'
 
 /**
  * Write-only hook for pantry operations
- * All writes go through ProductRepository (Neon-first)
+ * All writes go through ProductRepository (Neon-first with graceful error handling)
  */
 export const usePantryActions = () => {
-  // Create item with validation
+  // Create item with validation and enhanced error handling
   const create = useCallback(async (itemData: {
     name: string
     category: ItemCategory
@@ -28,18 +28,30 @@ export const usePantryActions = () => {
     }
 
     const { ProductRepository } = await import('@/services/ProductRepository')
-    return await ProductRepository.upsert({
-      name: itemData.name.trim(),
-      category: itemData.category,
-      quantity: Math.max(1, Math.floor(itemData.quantity)),
-      unit: itemData.unit,
-      ...(itemData.barcode ? { barcode: itemData.barcode } : {}),
-      ...(itemData.brand ? { brand: itemData.brand } : {}),
-      ...(itemData.notes ? { notes: itemData.notes } : {}),
-      purchaseDate: new Date(),
-      status: 'fresh',
-      tags: []
-    } as any)
+    try {
+      return await ProductRepository.upsert({
+        name: itemData.name.trim(),
+        category: itemData.category,
+        quantity: Math.max(1, Math.floor(itemData.quantity)),
+        unit: itemData.unit,
+        ...(itemData.barcode ? { barcode: itemData.barcode } : {}),
+        ...(itemData.brand ? { brand: itemData.brand } : {}),
+        ...(itemData.notes ? { notes: itemData.notes } : {}),
+        purchaseDate: new Date(),
+        status: 'fresh',
+        tags: []
+      } as any)
+    } catch (error: any) {
+      // Enhanced error handling - provide context about NeonDB connectivity
+      if (error.message?.includes('API base URL not configured')) {
+        throw new Error('NeonDB not configured. Item saved locally only.')
+      } else if (error.message?.includes('failed:')) {
+        throw new Error('NeonDB connection failed. Item saved locally and will sync when connection is restored.')
+      } else {
+        // Re-throw original error for other issues
+        throw error
+      }
+    }
   }, [])
 
   // Update existing item
