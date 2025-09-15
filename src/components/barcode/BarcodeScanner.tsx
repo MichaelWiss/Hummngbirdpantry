@@ -15,22 +15,8 @@ import type { Barcode } from '@/types'
 type PermissionName = 'camera' | 'microphone' | 'geolocation' | 'notifications'
 interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void; uiOnly?: boolean; initialStream?: MediaStream; startOnMount?: boolean }
 
-let activeScannerCount = 0
-
+// ScannerProvider ensures singleton - no component-level guards needed
 const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose, uiOnly = false, initialStream, startOnMount }) => {
-  const [blocked, setBlocked] = useState(false)
-  useEffect(() => {
-    if (activeScannerCount > 0) {
-      setBlocked(true)
-    } else {
-      activeScannerCount++
-    }
-    return () => { activeScannerCount = Math.max(0, activeScannerCount - 1) }
-  }, [])
-  const instanceId = React.useRef(Date.now() + Math.random())
-  const autoStartedRef = React.useRef(false)
-  
-  // No component-level singleton guards; App controls single render
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
@@ -166,7 +152,6 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
   }
 
   const startScanning = useCallback(async () => {
-    if (blocked) return
     if (uiOnly) return
     if (isScanning || isInitializing) return
     if (!videoRef.current) return
@@ -259,7 +244,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
         onError(`Camera error: ${e?.message || 'Unknown'}`)
       }
     }
-  }, [blocked, uiOnly, isScanning, isInitializing, onBarcodeDetected, onError])
+  }, [uiOnly, isScanning, isInitializing, onBarcodeDetected, onError])
 
   const stopScanning = useCallback(() => {
     setIsScanning(false)
@@ -281,7 +266,6 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
 
   // Auto-start if permission already granted (restores previous UX)
   useEffect(() => {
-    if (blocked) return
     if (!flagsRef.current.autoStartOnGrant) return
     if (uiOnly) return
     if (autoStartedRef.current) return
@@ -290,7 +274,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
       if (flagsRef.current.verboseDebug) console.debug('[BarcodeScanner] autoStartOnGrant (baseline)')
       startScanning()
     }
-  }, [blocked, uiOnly, hasPermission, startScanning])
+  }, [uiOnly, hasPermission, startScanning])
 
   // Initial mount: bind provided stream or request permission and start
   useEffect(() => {
@@ -316,7 +300,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
   // Diagnostics module removed for baseline
 
   return (
-    blocked ? null : <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" data-testid="barcode-scanner-modal" data-instance-id={instanceId.current.toString()}>
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" data-testid="barcode-scanner-modal">
       <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl">
         <div className="flex items-center justify-between p-4 border-b border-neutral-200">
           <div className="flex items-center space-x-2">

@@ -2,9 +2,8 @@
 // Provides comprehensive item addition with manual entry and barcode scanning
 
 import React, { useState } from 'react'
-import { X, Scan, Plus, AlertCircle, CheckCircle } from 'lucide-react'
-// import { usePantry } from '@/hooks/usePantry'
-import { useBarcodeScanner } from '@/hooks/useBarcodeScanner'
+import { X, Scan, Plus, CheckCircle } from 'lucide-react'
+import { usePantryActions } from '@/hooks/usePantryActions'
 import type { ItemCategory, MeasurementUnit, Barcode } from '@/types'
 
 interface AddItemModalProps {
@@ -21,8 +20,7 @@ interface AddItemModalProps {
 }
 
 const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, initialData }) => {
-  // const { addItem } = usePantry()
-  const barcodeScanner = useBarcodeScanner()
+  const { create } = usePantryActions()
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -61,18 +59,14 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
     setIsSubmitting(true)
 
     try {
-      const { ProductRepository } = await import('@/services/ProductRepository')
-      await ProductRepository.upsert({
+      await create({
         name: formData.name.trim(),
         category: formData.category,
         quantity: formData.quantity,
         unit: formData.unit,
-        barcode: formData.barcode || undefined,
-        notes: formData.notes.trim() || undefined,
-        purchaseDate: new Date(),
-        status: 'fresh',
-        tags: []
-      } as any)
+        ...(formData.barcode ? { barcode: formData.barcode } : {}),
+        ...(formData.notes.trim() ? { notes: formData.notes.trim() } : {})
+      })
 
       console.log('✅ Item added successfully:', formData.name)
       onClose()
@@ -108,15 +102,15 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
             </button>
           </div>
 
-          {/* Success message for scanned products */}
-          {barcodeScanner.lookupResult?.found && (
+          {/* Success message for prefilled products */}
+          {initialData?.name && (
             <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
               <div className="flex items-center space-x-2 mb-2">
                 <CheckCircle className="w-5 h-5 text-green-600" />
                 <span className="font-medium text-green-800">Product Found!</span>
               </div>
               <p className="text-green-700 text-sm">
-                &quot;{barcodeScanner.lookupResult.productData?.name}&quot; has been auto-filled below.
+                &quot;{initialData.name}&quot; has been auto-filled below.
                 Review and adjust the details as needed.
               </p>
             </div>
@@ -163,16 +157,9 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
                 className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
               />
 
-              {barcodeScanner.error && (
-                <div className="mt-2 flex items-center space-x-2 text-red-600 text-sm">
-                  <AlertCircle size={16} />
-                  <span>{barcodeScanner.error}</span>
-                </div>
-              )}
-
               {formData.barcode && (
                 <div className="mt-2 text-xs text-neutral-500">
-                  Format: {barcodeScanner.getBarcodeInfo(formData.barcode as Barcode)?.format || 'Unknown'}
+                  Barcode: {formData.barcode}
                 </div>
               )}
             </div>

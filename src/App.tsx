@@ -35,62 +35,48 @@ const App: React.FC = () => {
   const openScanner = React.useCallback(() => {
     if (scannerCtx) {
       scannerCtx.open(async (barcode) => {
-        // Minimal, server-first flow
+        // Clean, server-first flow
         try {
-          const base = getApiBaseUrl()
+          const baseUrl = getApiBaseUrl()
           const { ProductRepository } = await import('@/services/ProductRepository')
-          const { BarcodeService } = await import('@/services/barcode.service')
-          const { fetchProductByBarcode } = await import('@/services/openFoodFacts.service')
-          const { pantryApi } = await import('@/services/pantryApi.service')
-
-          // If we already have it locally, try server increment first; form on failure
-          const localExisting = await ProductRepository.getByBarcode(barcode)
-          if (localExisting && base && dbOk) {
+          
+          // Try server increment first (for existing items)
+          if (baseUrl && dbOk !== false) {
             try {
               await ProductRepository.increment(barcode, 1)
-              return
+              console.log('✅ Incremented existing item')
+              return // Success - close scanner
             } catch (err) {
-              console.error('Increment failed; opening form:', err)
+              console.log('ℹ️ Item not found on server, opening form with prefill')
             }
           }
 
-          // Lookup on server first if API available
-          let serverItem: any = null
-          if (base && dbOk) {
-            serverItem = await pantryApi.getByBarcode(barcode)
-            if (serverItem) {
-              try {
-                await ProductRepository.increment(barcode, 1)
-                return
-              } catch (err) {
-                console.error('Server increment failed; opening form:', err)
-              }
-            }
-          }
-
-          // Prefill from local cache/mock/OFF and open form
-          let prefill = await BarcodeService.lookupProduct(barcode)
-          if (!prefill) {
-            const off = await fetchProductByBarcode(barcode)
-            if (off.found && off.data) prefill = off.data
-          }
-          if (prefill) {
-            const init = { name: prefill.name!, category: prefill.category as ItemCategory, quantity: 1, unit: 'pieces' as MeasurementUnit, barcode }
-            setAddItemInitialData(init)
-            setShowAddItemModal(true)
+          // Not found - open form with OFF prefill
+          const { lookupProductByBarcode } = await import('@/services/productLookup')
+          const productData = await lookupProductByBarcode(barcode)
+          
+          if (productData) {
+            setAddItemInitialData({
+              barcode,
+              name: productData.name,
+              category: productData.category,
+              quantity: 1,
+              unit: 'pieces' as MeasurementUnit,
+              ...(productData.brand ? { brand: productData.brand } : {})
+            })
           } else {
             setAddItemInitialData({ barcode })
-            setShowAddItemModal(true)
           }
+          
+          setShowAddItemModal(true)
         } catch (e) {
           console.error('Scanner pipeline failed:', e)
           setAddItemInitialData({ barcode })
           setShowAddItemModal(true)
         }
       })
-      return
     }
-  }, [scannerCtx])
+  }, [scannerCtx, dbOk])
 
   // Dev-only: filter a benign ZXing / video element warning that can appear once during
   // stream handoff ("Trying to play video that is already playing."). This prevents
@@ -118,16 +104,13 @@ const App: React.FC = () => {
   React.useEffect(() => {
     if (initRunRef.current) return
     initRunRef.current = true
-    const initializeCache = async () => {
+    const initializeApp = async () => {
       try {
-        // Import cache services dynamically to avoid circular dependencies
-        const { BarcodeService } = await import('@/services/barcode.service')
+        // Import services dynamically to avoid circular dependencies
         const { ProductRepository } = await import('@/services/ProductRepository')
         const { usePantryStore } = await import('@/stores/pantry.store')
 
-        // Initialize cache system
-        await BarcodeService.initializeCache()
-        console.log('🚀 App initialized with barcode cache support')
+        console.log('🚀 App initializing...')
 
         // Check API connectivity first
         const baseUrl = getApiBaseUrl()
@@ -176,12 +159,12 @@ const App: React.FC = () => {
         }
 
       } catch (error) {
-        console.error('❌ Failed to initialize cache system:', error)
-        // Continue app initialization even if cache fails
+        console.error('❌ Failed to initialize app:', error)
+        // Continue app initialization even if hydration fails
       }
     }
 
-    initializeCache()
+    initializeApp()
   }, [])
 
   // Camera diagnostic function removed (unused)

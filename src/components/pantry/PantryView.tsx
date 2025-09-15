@@ -3,7 +3,7 @@
 
 import React from 'react'
 // Icons are not used in this component, they were moved to the bottom navigation
-import { usePantry, usePantryStats } from '@/hooks/usePantry'
+import { usePantryData, usePantryStats } from '@/hooks/usePantryData'
 // Barcode scanner handled by parent App component
 // import { useBarcodeScanner } from '@/hooks/useBarcodeScanner'
 // Modals are handled by parent App component
@@ -73,7 +73,7 @@ const PantryView: React.FC = () => {
     searchQuery,
     setSearchQuery,
     clearError
-  } = usePantry()
+  } = usePantryData()
 
   const stats = usePantryStats()
   // Barcode scanner handled by parent App component

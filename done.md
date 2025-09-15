@@ -1,66 +1,39 @@
-# HummingbirdPantry - Completed Tasks
+# HummingbirdPantry — Session Summary (2025-09-14)
 
-## Project Completion Status
-**Overall Progress: 50% Complete (Core Pantry Management Complete)**
+## What we changed (core-first, Neon-first)
 
-*This file tracks completed tasks and project milestones. Tasks are moved here from `tasks.md` as they are completed.*
+- BarcodeScanner stream reuse (single-gesture compliant)
+  - Updated `src/components/barcode/BarcodeScanner.tsx` so `startScanning()` reuses the click-acquired `initialStream`/existing stream and only calls `getUserMedia` when no stream exists.
+- Single scanner path (provider-driven)
+  - `ScannerProvider` remains the sole render path; legacy direct render was removed earlier; we kept it that way.
+- Server-first scan pipeline
+  - In `src/App.tsx`, the scan callback now tries Neon first. If increment succeeds, we close; on any miss/error we open `AddItemModal` with prefill from cache/OFF/mock.
+- Background sync disabled
+  - Removed background sync initialization from `src/App.tsx` to avoid side effects and ensure Neon-first behavior is observable.
 
----
+## Files edited this session
 
-## Recently Completed Tasks
+- `src/components/barcode/BarcodeScanner.tsx`
+- `src/App.tsx`
 
-### Project Documentation & Planning
-*All documentation tasks have been completed as part of the initial project planning phase*
+## Observed after changes (user-reported)
 
-### 2025-09-05 - Security & Tooling
-- [x] **Removed committed dev TLS private key & certificate**
-  - **Implementation details**: Deleted `key.pem` / `cert.pem`, added `.gitignore` patterns
-  - **Files modified**: `.gitignore`, removed key/cert
-  - **Key decisions**: Enforce local-only generation
-- [x] **Hardened HTTPS dev configuration**
-  - **Implementation details**: Env var overrides `VITE_HTTPS_CERT_PATH` / `VITE_HTTPS_KEY_PATH`, graceful fallback
-  - **Files modified**: `vite.config.ts`
-- [x] **Added secret scanning pre-commit hooks**
-  - **Implementation details**: `detect-secrets` baseline + PEM blocker hook
-  - **Files created**: `.pre-commit-config.yaml`, `.secrets.baseline`
-- [x] **Created security and remediation docs**
-  - **Docs**: `SECURITY.md`, `ROTATE_KEYS.md`, `docs/secrets-scanning.md`, `docs/local-https.md`, updated `cert.README.md`
-- [x] **Added comprehensive README**
-  - **Focus**: Current architecture, security steps, roadmap
-- [x] **Modularized barcode scanner UI**
-  - **Implementation**: Extracted viewport, overlay, permission, ready, insecure context banner components
-  - **Next**: Extract diagnostics + integrate `useBarcodeZxing`
-- [x] **Introduced permission & ZXing hooks**
-  - **Hooks**: `useCameraPermissions`, `useBarcodeZxing` (initial)
-  - **Benefit**: Simplifies orchestrator testing & state isolation
+- Chrome: double overlay still present
+- Firefox: modal not autofilling
+- Safari: product modal appears but does not autofill
+- NeonDB: not perceived as source of truth across browsers
 
-### 2025-09-05 - Barcode Scanner Stability Rollback & Fix
-  - **Problem**: Refactor introduced multi-phase initialization (preflight getUserMedia + ZXing start + restarts) causing black/ flashing video and duplicate overlays; Safari/Firefox showed live track without rendered frames (0×0 dimensions) and IndexSizeError spam.
-  - **Root Causes**:
-    - Early permission stream stopped before ZXing attached its own → race leaving video element without srcObject.
-    - Reader resets / fallback timers during attachment window.
-    - Overlay duplication from multiple mounts / layered focus frames creating double-border illusion (Safari).
-  - **Solution**: Replaced layered logic with a minimal deterministic pipeline:
-    1. Single getUserMedia acquisition (environment facingMode hint).
-    2. Bind stream directly to video; wait loadedmetadata.
-    3. Start continuous decode via `BrowserMultiFormatReader.decodeFromVideoElementContinuously` (no device re-open).
-    4. Simplified state (isInitializing, isScanning, hasPermission); removed restarts, polling, activation fallback, diagnostics interval.
-    5. Simplified `ScannerOverlay` to a single border + scan bar; added `pointer-events-none`.
-  - **Files Modified**: `src/components/barcode/BarcodeScanner.tsx`, `src/components/barcode/ui/ScannerOverlay.tsx`.
-  - **Key Decisions**: Prefer stability-first baseline; postpone advanced features until after verified multi-browser feed.
-  - **Testing**: Verified live feed and decoding on Chrome; Safari double-border removed after overlay simplification; awaiting extended Firefox/Safari decode verification.
-  - **Next Steps**: (Deferred) Single-shot mode toggle, device switch UI, decode throttling, re-introduction of diagnostics behind a flag.
-  - **Observation (Multi-Phase Init Rationale & Deprecation)**:
-    *Original Intent*: (a) Fast permission priming; (b) obtain labeled devices for back-camera preference; (c) warm camera to reduce first frame latency; (d) recover stalled attach via restart; (e) smooth UX with activation fallback; (f) isolate errors per phase.
-    *Why Removed*: Added a race by stopping the preflight stream before ZXing bound its own; restart/fallback timers reset reader mid-attach; complexity obscured true failure (0×0 dimensions) and produced duplicate overlay illusion. Net negative for reliability—single deterministic pipeline chosen instead.
+## Likely remaining gaps
 
+- Scanner overlay duplication: module-level `activeScannerCount` guard may interfere; provider already ensures singleton. Remove the guard to avoid blocked/duplicate states.
+- Base URL gating: the scan flow should attempt server ops whenever a base URL exists; do not wait on `dbOk` which may be stale/null during early startup.
+- Minor hygiene/lints: keep `openScanner` callback in sync with `dbOk`; add missing deps to `startScanning` useCallback; log resolved base URL once on startup to confirm runtime resolver.
 
+## Next steps (surgical)
 
----
-
-## Completed Milestones
-
-### ✅ Phase 0: Documentation & Planning (COMPLETED)
+- Remove `activeScannerCount`/`blocked` guard from `BarcodeScanner.tsx` (provider ensures single instance)
+- Add `dbOk` to `openScanner` dependency list and log resolved API base URL once on app init
+- Satisfy linter on `startScanning` by adding missing dependencies
 - [x] **Requirements documentation** - Created comprehensive requirements.md with all features
   - Added smart inventory management, voice/photo recognition, advanced shopping
   - Included technical requirements, architecture, and implementation phases
