@@ -104,27 +104,73 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
       setIsInitializing(true)
       const isSecure = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname)
       if (!isSecure) console.warn('⚠️ Camera access works best with HTTPS.')
+      
       const ua = navigator.userAgent.toLowerCase()
       const isSafari = ua.includes('safari') && !ua.includes('chrome')
       const isLocal = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
+      
       if (isSafari && !window.isSecureContext && !isLocal) {
         onError('iOS Safari blocks camera on HTTP. Use HTTPS (export VITE_USE_HTTPS=1).')
         setIsInitializing(false)
         return null
       }
+      
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error('MEDIA_DEVICES_NOT_SUPPORTED')
       }
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280, min: 640 },
-          height: { ideal: 720, min: 480 },
-          frameRate: { ideal: 30, min: 15 },
-          ...(isMobile && { width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 } })
+      
+      // Production-quality progressive constraint fallback
+      const constraints = [
+        // Try ideal constraints first
+        {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 },
+            frameRate: { ideal: 30, min: 15 }
+          }
+        },
+        // Fallback to simpler constraints
+        {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            frameRate: { ideal: 15, max: 15 }
+          }
+        },
+        // Basic constraints as last resort
+        {
+          video: {
+            facingMode: { ideal: 'environment' }
+          }
+        },
+        // Minimal constraints
+        {
+          video: true
         }
-      })
+      ]
+      
+      let stream: MediaStream | null = null
+      let lastError: Error | null = null
+      
+      for (const constraint of constraints) {
+        try {
+          console.log('[BarcodeScanner] Trying camera constraints:', constraint)
+          stream = await navigator.mediaDevices.getUserMedia(constraint)
+          console.log('[BarcodeScanner] Camera access successful')
+          break
+        } catch (err) {
+          lastError = err as Error
+          console.warn('[BarcodeScanner] Camera constraint failed:', constraint, err)
+          continue
+        }
+      }
+      
+      if (!stream) {
+        throw lastError || new Error('All camera constraints failed')
+      }
+      
       setHasPermission(true)
       setIsInitializing(false)
       return stream
@@ -277,20 +323,57 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
     }
   }, [uiOnly, hasPermission, startScanning])
 
-  // Initial mount: bind provided stream or request permission and start
+  // Initial mount: check security context and start scanner if requested
   useEffect(() => {
     const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
     const insecure = !window.isSecureContext && !isLocalHost
-    if (insecure) setNeedsSecureContext(true)
-    checkCameraPermission().then(state => {
-      if (state === 'denied') { setHasPermission(false); setPermissionInstructions(getBrowserInstructions()) }
-      else if (state === 'granted') setHasPermission(true)
-      else if (state === 'prompt') setHasPermission(null)
-    })
-    if (startOnMount) {
-      (async () => { const stream = await requestCameraPermission(); if (stream) startScanning() })()
+    if (insecure) {
+      setNeedsSecureContext(true)
+      return
     }
-  }, [startOnMount, requestCameraPermission, startScanning])
+
+    // Production-quality initialization flow
+    const initializeScanner = async () => {
+      try {
+        // First check current permission state
+        const permissionState = await checkCameraPermission()
+        
+        if (permissionState === 'denied') {
+          setHasPermission(false)
+          setPermissionInstructions(getBrowserInstructions())
+          return
+        }
+        
+        if (permissionState === 'granted') {
+          setHasPermission(true)
+        }
+        
+        // If startOnMount requested, proceed with camera initialization
+        if (startOnMount) {
+          console.log('[BarcodeScanner] Starting camera initialization...')
+          
+          if (permissionState === 'granted') {
+            // Permission already granted, start scanning directly
+            startScanning()
+          } else {
+            // Need to request permission first
+            const stream = await requestCameraPermission()
+            if (stream) {
+              console.log('[BarcodeScanner] Camera permission granted, starting scan...')
+              startScanning()
+            } else {
+              console.warn('[BarcodeScanner] Camera permission failed')
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[BarcodeScanner] Initialization failed:', error)
+        onError(`Scanner initialization failed: ${(error as Error).message}`)
+      }
+    }
+
+    initializeScanner()
+  }, [startOnMount, requestCameraPermission, startScanning, onError])
 
   // Release start guard when scanner becomes active or initialization ends
   // Start guard logic removed

@@ -9,15 +9,13 @@ import { Package, ShoppingCart, BarChart3, Scan, Plus } from 'lucide-react'
 import PantryView from '@/components/pantry/PantryView'
 import CategoryList from '@/components/pantry/CategoryList'
 import CategoryItems from '@/components/pantry/CategoryItems'
-import BarcodeScanner from '@/components/barcode/BarcodeScanner'
-import { ScannerProvider, useScanner } from '@/components/barcode/ScannerProvider'
+import { useScanner } from '@/components/barcode/ScannerProvider'
 import { getApiBaseUrl } from '@/services/apiClient'
 import AddItemModal from '@/components/pantry/AddItemModal'
 // Removed demo page from navigation
 
 // Main App component - Simple One-Column Mobile Layout
 const App: React.FC = () => {
-  const [showBarcodeScanner, setShowBarcodeScanner] = React.useState(false)
   const [showAddItemModal, setShowAddItemModal] = React.useState(false)
   const [currentView, setCurrentView] = React.useState<'pantry' | 'categories' | 'categoryItems'>('pantry')
   const [activeCategory, setActiveCategory] = React.useState<ItemCategory | null>(null)
@@ -34,7 +32,7 @@ const App: React.FC = () => {
   const scannerCtx = (() => { try { return (useScanner as any)() } catch { return null } })()
   const openScanner = React.useCallback(() => {
     if (scannerCtx) {
-      scannerCtx.open(async (barcode) => {
+      scannerCtx.open(async (barcode: Barcode) => {
         // Clean, server-first flow
         try {
           const baseUrl = getApiBaseUrl()
@@ -132,13 +130,40 @@ const App: React.FC = () => {
                 })
                 if (healthCheck.ok) {
                   const j = await healthCheck.json()
-                  const isHealthy = !!j?.dbOk
-                  if (isHealthy) {
-                    console.log('✅ API server + DB connected:', baseUrl)
+                  
+                  // Production-quality health check
+                  if (j?.dbOk !== undefined) {
+                    // Server provides dbOk field (preferred)
+                    const isHealthy = !!j.dbOk
+                    if (isHealthy) {
+                      console.log('✅ API server + DB connected:', baseUrl)
+                    } else {
+                      console.error('❌ API server reachable but DB not connected')
+                    }
+                    return isHealthy
+                  } else if (j?.ok) {
+                    // Server doesn't provide dbOk - test database connectivity ourselves
+                    console.log('ℹ️ Server missing dbOk field, testing database connectivity...')
+                    try {
+                      const dbTest = await fetch(`${baseUrl}/api/products?limit=1`, {
+                        cache: 'no-store',
+                        signal: AbortSignal.timeout(3000)
+                      })
+                      if (dbTest.ok) {
+                        console.log('✅ API server + DB connected (verified via products endpoint):', baseUrl)
+                        return true
+                      } else {
+                        console.error('❌ Database test failed:', dbTest.status)
+                        return false
+                      }
+                    } catch (dbError) {
+                      console.error('❌ Database connectivity test failed:', (dbError as Error).message)
+                      return false
+                    }
                   } else {
-                    console.error('❌ API server reachable but DB not connected')
+                    console.error('❌ Invalid health response:', j)
+                    return false
                   }
-                  return isHealthy
                 } else {
                   throw new Error(`HTTP ${healthCheck.status}`)
                 }
@@ -209,10 +234,34 @@ const App: React.FC = () => {
         
         if (healthCheck.ok) {
           const j = await healthCheck.json()
-          const isHealthy = !!j?.dbOk
-          setDbOk(isHealthy)
-          if (!isHealthy) {
-            console.warn('⚠️ Background health check: DB not connected')
+          
+          // Production-quality background health check
+          if (j?.dbOk !== undefined) {
+            // Server provides dbOk field
+            const isHealthy = !!j.dbOk
+            setDbOk(isHealthy)
+            if (!isHealthy) {
+              console.warn('⚠️ Background health check: DB not connected')
+            }
+          } else if (j?.ok) {
+            // Server doesn't provide dbOk - quick database test
+            try {
+              const dbTest = await fetch(`${baseUrl}/api/products?limit=1`, {
+                cache: 'no-store', 
+                signal: AbortSignal.timeout(2000) // Shorter timeout for background
+              })
+              const isHealthy = dbTest.ok
+              setDbOk(isHealthy)
+              if (!isHealthy) {
+                console.warn('⚠️ Background health check: DB test failed')
+              }
+            } catch {
+              setDbOk(false)
+              console.warn('⚠️ Background health check: DB test error')
+            }
+          } else {
+            setDbOk(false)
+            console.warn('⚠️ Background health check: Invalid response')
           }
         } else {
           setDbOk(false)
@@ -325,7 +374,7 @@ const App: React.FC = () => {
 
           {/* Add Item */}
           <button
-            onClick={() => { if (showAddItemModal) return; setShowBarcodeScanner(false); setShowAddItemModal(true) }}
+            onClick={() => { if (showAddItemModal) return; setShowAddItemModal(true) }}
             className="flex flex-col items-center justify-center py-3 px-2 hover:bg-neutral-50 transition-colors"
           >
             <Plus size={20} className="text-neutral-600 mb-1" />
@@ -375,7 +424,7 @@ const App: React.FC = () => {
           </button>
 
           <button
-            onClick={() => { if (showAddItemModal) return; setShowBarcodeScanner(false); setShowAddItemModal(true) }}
+            onClick={() => { if (showAddItemModal) return; setShowAddItemModal(true) }}
             className="flex flex-col items-center space-y-1 px-4 py-2 rounded-lg hover:bg-neutral-50 transition-colors text-neutral-600"
           >
             <Plus size={20} />
