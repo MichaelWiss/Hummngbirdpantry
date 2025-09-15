@@ -222,9 +222,15 @@ export const usePantryStore = create<PantryState>()(
         // ACTIONS
         actions: {
           // ADD ITEM
-          addItem: async (_itemData) => {
-            // Deprecated: do not write locally. All writes must go through server via ProductRepository.
-            set({ loading: 'error', error: 'Writes must go through server. Use ProductRepository.' })
+          addItem: async (itemData) => {
+            // Forward to ProductRepository for Neon-first behavior
+            try {
+              const { ProductRepository } = await import('@/services/ProductRepository')
+              await ProductRepository.upsert(itemData as any)
+            } catch (error: any) {
+              set({ loading: 'error', error: error?.message || 'Failed to add item' })
+              throw error
+            }
           },
           replaceAll: (items) => {
             set(state => {
@@ -255,18 +261,41 @@ export const usePantryStore = create<PantryState>()(
           },
 
           // UPDATE ITEM
-          updateItem: async (_id, _updates) => {
-            set({ loading: 'error', error: 'Writes must go through server. Use ProductRepository.' })
+          updateItem: async (id, updates) => {
+            // Forward to ProductRepository for Neon-first behavior
+            try {
+              const { ProductRepository } = await import('@/services/ProductRepository')
+              await ProductRepository.update(id, updates)
+            } catch (error: any) {
+              set({ loading: 'error', error: error?.message || 'Failed to update item' })
+              throw error
+            }
           },
 
           // REMOVE ITEM
-          removeItem: async (_id) => {
-            set({ loading: 'error', error: 'Writes must go through server. Use ProductRepository.' })
+          removeItem: async (id) => {
+            // Forward to ProductRepository for Neon-first behavior
+            try {
+              const { ProductRepository } = await import('@/services/ProductRepository')
+              await ProductRepository.remove(id)
+            } catch (error: any) {
+              set({ loading: 'error', error: error?.message || 'Failed to remove item' })
+              throw error
+            }
           },
 
           // BULK REMOVE ITEMS
-          bulkRemove: async (_ids) => {
-            set({ loading: 'error', error: 'Writes must go through server. Use ProductRepository.' })
+          bulkRemove: async (ids) => {
+            // Forward to ProductRepository for Neon-first behavior
+            try {
+              const { ProductRepository } = await import('@/services/ProductRepository')
+              for (const id of ids) {
+                await ProductRepository.remove(id)
+              }
+            } catch (error: any) {
+              set({ loading: 'error', error: error?.message || 'Failed to remove items' })
+              throw error
+            }
           },
 
           // FILTERING ACTIONS

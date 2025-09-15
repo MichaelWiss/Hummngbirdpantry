@@ -35,15 +35,20 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, onOpenScanner, ini
 
   React.useEffect(() => {
     if (!initialData) return
-    setFormData(prev => ({
-      ...prev,
-      name: initialData.name ?? prev.name,
-      category: initialData.category ?? prev.category,
-      quantity: initialData.quantity ?? prev.quantity,
-      unit: initialData.unit ?? prev.unit,
-      barcode: (initialData.barcode as Barcode | '') ?? prev.barcode,
-      notes: initialData.notes ?? prev.notes
-    }))
+    console.log('🔄 AddItemModal: Updating form with initialData:', initialData)
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        name: initialData.name ?? prev.name,
+        category: initialData.category ?? prev.category,
+        quantity: initialData.quantity ?? prev.quantity,
+        unit: initialData.unit ?? prev.unit,
+        barcode: (initialData.barcode as Barcode | '') ?? prev.barcode,
+        notes: initialData.notes ?? prev.notes
+      }
+      console.log('🔄 AddItemModal: New form data:', newData)
+      return newData
+    })
   }, [initialData])
 
   // Barcode handling is centralized; this modal requests scanner via onOpenScanner

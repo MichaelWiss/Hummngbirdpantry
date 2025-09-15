@@ -41,7 +41,7 @@ const App: React.FC = () => {
           const { ProductRepository } = await import('@/services/ProductRepository')
           
           // Try server increment first (for existing items)
-          if (baseUrl && dbOk !== false) {
+          if (baseUrl && dbOk === true) {
             try {
               await ProductRepository.increment(barcode, 1)
               console.log('✅ Incremented existing item')
@@ -49,6 +49,8 @@ const App: React.FC = () => {
             } catch (err) {
               console.log('ℹ️ Item not found on server, opening form with prefill')
             }
+          } else if (baseUrl && dbOk === false) {
+            console.log('⚠️ Server unreachable, opening form with prefill')
           }
 
           // Not found - open form with OFF prefill
@@ -56,15 +58,18 @@ const App: React.FC = () => {
           const productData = await lookupProductByBarcode(barcode)
           
           if (productData) {
-            setAddItemInitialData({
+            const initialData = {
               barcode,
               name: productData.name,
               category: productData.category,
               quantity: 1,
               unit: 'pieces' as MeasurementUnit,
               ...(productData.brand ? { brand: productData.brand } : {})
-            })
+            }
+            console.log('🔄 App: Setting initial data with product:', initialData)
+            setAddItemInitialData(initialData)
           } else {
+            console.log('🔄 App: Setting initial data with barcode only:', { barcode })
             setAddItemInitialData({ barcode })
           }
           
