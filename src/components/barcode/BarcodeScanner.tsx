@@ -43,14 +43,47 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
           console.log('📱 Navigator mediaDevices available:', !!navigator.mediaDevices)
           console.log('🔒 Secure context:', window.isSecureContext)
           
-          // Direct camera initialization to avoid callback dependencies
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: { ideal: 'environment' },
-              width: { ideal: 1280, min: 640 },
-              height: { ideal: 720, min: 480 }
+          // Try with progressive fallback for camera constraints
+          let stream: MediaStream | null = null
+          const constraints = [
+            // First try: Ideal back camera with high resolution
+            {
+              video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1280, min: 640 },
+                height: { ideal: 720, min: 480 }
+              }
+            },
+            // Fallback 1: Any back camera
+            {
+              video: {
+                facingMode: { ideal: 'environment' }
+              }
+            },
+            // Fallback 2: Any camera
+            {
+              video: true
             }
-          })
+          ]
+          
+          for (let i = 0; i < constraints.length; i++) {
+            try {
+              console.log(`📷 Trying camera constraint set ${i + 1}/${constraints.length}:`, constraints[i])
+              stream = await navigator.mediaDevices.getUserMedia(constraints[i])
+              console.log('✅ Got media stream with constraint set', i + 1)
+              break
+            } catch (constraintError) {
+              console.log(`❌ Constraint set ${i + 1} failed:`, constraintError)
+              if (i === constraints.length - 1) {
+                // All constraints failed, throw the last error
+                throw constraintError
+              }
+            }
+          }
+          
+          if (!stream) {
+            throw new Error('Failed to get camera stream with any constraints')
+          }
           
           console.log('✅ Got media stream:', stream)
           console.log('🎬 Stream tracks:', stream.getTracks().map(t => ({
@@ -207,23 +240,82 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
   }, [])
 
   return (
-    <div className="fixed inset-0 bg-black z-50 flex flex-col">
+    <div 
+      className="fixed inset-0 bg-black z-50 flex flex-col"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'black',
+        zIndex: 9999,
+        display: 'flex',
+        flexDirection: 'column'
+      }}
+    >
       {/* Header */}
-      <div className="flex justify-between items-center p-4 bg-black/80 text-white">
-        <h2 className="text-lg font-semibold">Scan Barcode</h2>
+      <div 
+        className="flex justify-between items-center p-4 bg-black/80 text-white"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '1rem',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          color: 'white'
+        }}
+      >
+        <h2 
+          className="text-lg font-semibold"
+          style={{ fontSize: '1.125rem', fontWeight: '600' }}
+        >
+          Scan Barcode
+        </h2>
         <button
           onClick={handleClose}
           className="p-2 rounded-full hover:bg-white/20 transition-colors"
+          style={{
+            padding: '0.5rem',
+            borderRadius: '50%',
+            border: 'none',
+            backgroundColor: 'transparent',
+            color: 'white',
+            cursor: 'pointer'
+          }}
         >
           <X size={24} />
         </button>
       </div>
 
       {/* Camera viewport */}
-      <div className="flex-1 relative">
+      <div 
+        className="flex-1 relative"
+        style={{
+          flex: 1,
+          position: 'relative'
+        }}
+      >
         {isInitializing && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
-            <div className="text-center">
+          <div 
+            className="absolute inset-0 flex items-center justify-center bg-black/80 text-white"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              color: 'white'
+            }}
+          >
+            <div 
+              className="text-center"
+              style={{ textAlign: 'center' }}
+            >
               <Camera size={48} className="mx-auto mb-4 animate-pulse" />
               <p>Initializing camera...</p>
             </div>
@@ -231,13 +323,38 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
         )}
 
         {hasPermission === false && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
-            <div className="text-center p-6">
+          <div 
+            className="absolute inset-0 flex items-center justify-center bg-black/80 text-white"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              color: 'white'
+            }}
+          >
+            <div 
+              className="text-center p-6"
+              style={{ textAlign: 'center', padding: '1.5rem' }}
+            >
               <Camera size={48} className="mx-auto mb-4" />
               <p className="mb-4">Camera access is required to scan barcodes</p>
               <button
                 onClick={handlePermissionRequest}
                 className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#16a34a',
+                  color: 'white',
+                  borderRadius: '0.5rem',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
               >
                 Grant Permission
               </button>
@@ -248,26 +365,113 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
         <video
           ref={videoRef}
           className="w-full h-full object-cover"
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover'
+          }}
           playsInline
           muted
         />
 
         {/* Scanning overlay */}
         {isScanning && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-64 h-64 border-2 border-white/50 rounded-lg relative">
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary-400 rounded-tl-lg" />
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary-400 rounded-tr-lg" />
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary-400 rounded-bl-lg" />
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary-400 rounded-br-lg" />
+          <div 
+            className="absolute inset-0 flex items-center justify-center"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <div 
+              className="w-64 h-64 border-2 border-white/50 rounded-lg relative"
+              style={{
+                width: '16rem',
+                height: '16rem',
+                border: '2px solid rgba(255, 255, 255, 0.5)',
+                borderRadius: '0.5rem',
+                position: 'relative'
+              }}
+            >
+              <div 
+                className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary-400 rounded-tl-lg"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '2rem',
+                  height: '2rem',
+                  borderTop: '4px solid #4ade80',
+                  borderLeft: '4px solid #4ade80',
+                  borderTopLeftRadius: '0.5rem'
+                }}
+              />
+              <div 
+                className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary-400 rounded-tr-lg"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: '2rem',
+                  height: '2rem',
+                  borderTop: '4px solid #4ade80',
+                  borderRight: '4px solid #4ade80',
+                  borderTopRightRadius: '0.5rem'
+                }}
+              />
+              <div 
+                className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary-400 rounded-bl-lg"
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  width: '2rem',
+                  height: '2rem',
+                  borderBottom: '4px solid #4ade80',
+                  borderLeft: '4px solid #4ade80',
+                  borderBottomLeftRadius: '0.5rem'
+                }}
+              />
+              <div 
+                className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary-400 rounded-br-lg"
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  width: '2rem',
+                  height: '2rem',
+                  borderBottom: '4px solid #4ade80',
+                  borderRight: '4px solid #4ade80',
+                  borderBottomRightRadius: '0.5rem'
+                }}
+              />
             </div>
           </div>
         )}
       </div>
 
       {/* Instructions */}
-      <div className="p-4 bg-black/80 text-white text-center">
-        <p className="text-sm">Position barcode within the frame</p>
+      <div 
+        className="p-4 bg-black/80 text-white text-center"
+        style={{
+          padding: '1rem',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          color: 'white',
+          textAlign: 'center'
+        }}
+      >
+        <p 
+          className="text-sm"
+          style={{ fontSize: '0.875rem' }}
+        >
+          Position barcode within the frame
+        </p>
       </div>
     </div>
   )
