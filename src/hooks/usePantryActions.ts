@@ -1,15 +1,16 @@
-// usePantryActions Hook - Write-only pantry operations
-// Follows style.md principles: Single Responsibility, Clean separation of concerns
+/**
+ * usePantryActions - Clean implementation
+ * Following style.md: single responsibility, clean error handling
+ * Following requirements.md: Neon-first with immediate error surfacing
+ */
 
 import { useCallback } from 'react'
-import type { PantryItem, ID, ItemCategory, MeasurementUnit } from '@/types'
+import { apiService } from '@/services/api.service'
+import { usePantryStore } from '@/stores/pantry.store'
+import type { PantryItem, ID, ItemCategory, MeasurementUnit, Barcode } from '@/types'
 
-/**
- * Write-only hook for pantry operations
- * All writes go through ProductRepository (Neon-first with graceful error handling)
- */
 export const usePantryActions = () => {
-  // Create item with validation and enhanced error handling
+  // Create item with validation
   const create = useCallback(async (itemData: {
     name: string
     category: ItemCategory
@@ -27,63 +28,103 @@ export const usePantryActions = () => {
       throw new Error('Quantity must be greater than 0')
     }
 
-    const { ProductRepository } = await import('@/services/ProductRepository')
-    try {
-      return await ProductRepository.upsert({
-        name: itemData.name.trim(),
-        category: itemData.category,
-        quantity: Math.max(1, Math.floor(itemData.quantity)),
-        unit: itemData.unit,
-        ...(itemData.barcode ? { barcode: itemData.barcode } : {}),
-        ...(itemData.brand ? { brand: itemData.brand } : {}),
-        ...(itemData.notes ? { notes: itemData.notes } : {}),
-        purchaseDate: new Date(),
-        status: 'fresh',
-        tags: []
-      } as any)
-    } catch (error: any) {
-      // Enhanced error handling - provide context about NeonDB connectivity
-      if (error.message?.includes('API base URL not configured')) {
-        throw new Error('NeonDB not configured. Item saved locally only.')
-      } else if (error.message?.includes('failed:')) {
-        throw new Error('NeonDB connection failed. Item saved locally and will sync when connection is restored.')
-      } else {
-        // Re-throw original error for other issues
-        throw error
-      }
+    // Build the item data with proper optional field handling
+    const itemToCreate: Omit<PantryItem, 'id' | 'created_at' | 'updated_at'> = {
+      name: itemData.name.trim(),
+      category: itemData.category,
+      quantity: Math.max(1, Math.floor(itemData.quantity)),
+      unit: itemData.unit,
+      purchaseDate: new Date(),
+      lastModified: new Date(),
+      status: 'fresh',
+      tags: [],
+      ...(itemData.barcode && { barcode: itemData.barcode as Barcode }),
+      ...(itemData.brand && { brand: itemData.brand }),
+      ...(itemData.notes && { notes: itemData.notes })
     }
+
+    const result = await apiService.createItem(itemToCreate)
+
+    if (result.error) {
+      throw new Error(result.error)
+    }
+
+    // Update store with new item
+    if (result.data) {
+      usePantryStore.getState().actions.upsertLocal(result.data)
+    }
+
+    return result.data
   }, [])
 
   // Update existing item
   const update = useCallback(async (id: ID, updates: Partial<PantryItem>) => {
-    const { ProductRepository } = await import('@/services/ProductRepository')
-    return await ProductRepository.update(id, updates)
+    const result = await apiService.updateItem(id, updates)
+    
+    if (result.error) {
+      throw new Error(result.error)
+    }
+
+    // Update store with updated item
+    if (result.data) {
+      usePantryStore.getState().actions.upsertLocal(result.data)
+    }
+
+    return result.data
   }, [])
 
   // Remove item
   const remove = useCallback(async (id: ID) => {
-    const { ProductRepository } = await import('@/services/ProductRepository')
-    return await ProductRepository.remove(id)
+    const result = await apiService.deleteItem(id)
+    
+    if (result.error) {
+      throw new Error(result.error)
+    }
+
+    // Remove from store
+    try {
+      usePantryStore.getState().actions.removeLocal(id)
+    } catch {
+      // Ignore UI remove errors
+    }
   }, [])
 
   // Increment item quantity
   const increment = useCallback(async (barcode: string, by: number = 1) => {
-    const { ProductRepository } = await import('@/services/ProductRepository')
-    return await ProductRepository.increment(barcode as any, by)
+    const result = await apiService.incrementItem(barcode as Barcode, by)
+    
+    if (result.error) {
+      throw new Error(result.error)
+    }
+
+    // Update store with incremented item
+    if (result.data) {
+      usePantryStore.getState().actions.upsertLocal(result.data)
+    }
+
+    return result.data
   }, [])
 
-  // Bulk operations
+  // Bulk remove operations
   const bulkRemove = useCallback(async (ids: ID[]) => {
     if (ids.length === 0) return
+
+    const errors: string[] = []
     
-    const { ProductRepository } = await import('@/services/ProductRepository')
     for (const id of ids) {
-      await ProductRepository.remove(id)
+      try {
+        await remove(id)
+      } catch (error) {
+        errors.push(`Failed to remove ${id}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
     }
-  }, [])
+
+    if (errors.length > 0) {
+      throw new Error(`Bulk removal completed with errors: ${errors.join('; ')}`)
+    }
+  }, [remove])
 
   return {
-    // Core operations (all Neon-first)
     create,
     update,
     remove,

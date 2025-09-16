@@ -1,459 +1,210 @@
-// BarcodeScanner Component - Professional barcode scanning with @zxing/library
-// Provides real-time barcode detection with camera integration
+/**
+ * BarcodeScanner - Clean barcode scanning component
+ * Following style.md: essential functionality only, proper TypeScript
+ */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library'
-import { X, Scan, Camera } from 'lucide-react'
-import CameraViewport from './ui/CameraViewport'
-import ScannerOverlay from './ui/ScannerOverlay'
-import InsecureContextBanner from './ui/InsecureContextBanner'
-import ReadyPanel from './ui/ReadyPanel'
-import PermissionPanel from './ui/PermissionPanel'
-import type { Barcode } from '@/types'
-// Simplified baseline: direct getUserMedia + continuous decode; prior layered logic removed for stability.
+import { X, Camera } from 'lucide-react'
 
-type PermissionName = 'camera' | 'microphone' | 'geolocation' | 'notifications'
-interface BarcodeScannerProps { onBarcodeDetected: (barcode: Barcode) => void; onError: (error: string) => void; onClose: () => void; uiOnly?: boolean; startOnMount?: boolean }
+interface BarcodeScannerProps {
+  onBarcodeDetected: (barcode: string) => void
+  onError: (error: string) => void
+  onClose: () => void
+}
 
-// ScannerProvider ensures singleton - no component-level guards needed
-const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onError, onClose, uiOnly = false, startOnMount }) => {
+const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
+  onBarcodeDetected,
+  onError,
+  onClose
+}) => {
+  // Essential state only
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
   const [isInitializing, setIsInitializing] = useState(false)
+  
+  // Scanner refs
   const readerRef = useRef<BrowserMultiFormatReader | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const recentResultsRef = useRef<{ text: string; ts: number }[]>([])
-  const acceptedRef = useRef(false)
-  const autoStartedRef = useRef(false)
 
-  // --- UPC/EAN normalization and checksum validation helpers ---
-  const isDigitsOnly = (s: string) => /^\d+$/.test(s)
-  const digitAt = (code: string, index: number) => code.charCodeAt(index) - 48
-  const checksumEAN13 = (code: string) => {
-    if (code.length !== 13 || !isDigitsOnly(code)) return false
-    const check = digitAt(code, 12)
-    let sum = 0
-    for (let i = 0; i < 12; i++) {
-      const weight = (i % 2 === 0) ? 1 : 3 // positions 0..11
-      sum += digitAt(code, i) * weight
-    }
-    const calc = (10 - (sum % 10)) % 10
-    return calc === check
-  }
-  const checksumUPCA = (code: string) => {
-    if (code.length !== 12 || !isDigitsOnly(code)) return false
-    const check = digitAt(code, 11)
-    let sum = 0
-    for (let i = 0; i < 11; i++) {
-      const weight = (i % 2 === 0) ? 3 : 1 // UPC-A uses 3 for odd positions (0-based)
-      sum += digitAt(code, i) * weight
-    }
-    const calc = (10 - (sum % 10)) % 10
-    return calc === check
-  }
-  const checksumEAN8 = (code: string) => {
-    if (code.length !== 8 || !isDigitsOnly(code)) return false
-    const check = digitAt(code, 7)
-    let sum = 0
-    for (let i = 0; i < 7; i++) {
-      const weight = (i % 2 === 0) ? 3 : 1 // positions 0..6
-      sum += digitAt(code, i) * weight
-    }
-    const calc = (10 - (sum % 10)) % 10
-    return calc === check
-  }
-  const normalizeAndValidateBarcode = (raw: string): { normalized: string; valid: boolean } => {
-    const trimmed = raw.trim()
-    if (isDigitsOnly(trimmed)) {
-      // numeric-only symbologies (retain leading zeros)
-      if (trimmed.length === 13) return { normalized: trimmed, valid: checksumEAN13(trimmed) }
-      if (trimmed.length === 12) return { normalized: trimmed, valid: checksumUPCA(trimmed) }
-      if (trimmed.length === 8) return { normalized: trimmed, valid: checksumEAN8(trimmed) }
-      // other numeric lengths: pass through as-is
-      return { normalized: trimmed, valid: true }
-    }
-    // non-numeric (Code128/QR etc.): pass through
-    return { normalized: trimmed, valid: true }
-  }
-  // (selectingRef removed; no longer needed in simplified flow)
-  const [permissionInstructions, setPermissionInstructions] = useState('')
-  const [needsSecureContext, setNeedsSecureContext] = useState(false)
-  const [userGestureRequested, setUserGestureRequested] = useState(false)
-
-  // Scanner behavior feature flags (tune without code churn)
-  const flagsRef = React.useRef({ autoStartOnGrant: true, verboseDebug: !!(import.meta as any).env?.DEV })
-
-  const checkCameraPermission = async () => {
+  // Clean camera initialization
+  const initializeCamera = useCallback(async () => {
+    if (isInitializing) return
+    
+    setIsInitializing(true)
+    
     try {
-      if (!navigator.permissions) return null
-      const result = await navigator.permissions.query({ name: 'camera' as PermissionName })
-      return result.state
-    } catch {
-      return null
-    }
-  }
-
-  // moved below after function declarations to satisfy hooks/hoisting
-
-  const requestCameraPermission = useCallback(async () => {
-    if (uiOnly) {
-      return null
-    }
-    try {
-      setIsInitializing(true)
-      const isSecure = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname)
-      if (!isSecure) console.warn('⚠️ Camera access works best with HTTPS.')
-      
-      const ua = navigator.userAgent.toLowerCase()
-      const isSafari = ua.includes('safari') && !ua.includes('chrome')
-      const isLocal = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
-      
-      if (isSafari && !window.isSecureContext && !isLocal) {
-        onError('iOS Safari blocks camera on HTTP. Use HTTPS (export VITE_USE_HTTPS=1).')
-        setIsInitializing(false)
-        return null
-      }
-      
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('MEDIA_DEVICES_NOT_SUPPORTED')
-      }
-      
-      // Production-quality progressive constraint fallback
-      const constraints = [
-        // Try ideal constraints first
-        {
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280, min: 640 },
-            height: { ideal: 720, min: 480 },
-            frameRate: { ideal: 30, min: 15 }
-          }
-        },
-        // Fallback to simpler constraints
-        {
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-            frameRate: { ideal: 15, max: 15 }
-          }
-        },
-        // Basic constraints as last resort
-        {
-          video: {
-            facingMode: { ideal: 'environment' }
-          }
-        },
-        // Minimal constraints
-        {
-          video: true
+      // Simple camera constraints - no complex fallbacks
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 }
         }
-      ]
+      })
       
-      let stream: MediaStream | null = null
-      let lastError: Error | null = null
+      streamRef.current = stream
       
-      for (const constraint of constraints) {
-        try {
-          console.log('[BarcodeScanner] Trying camera constraints:', constraint)
-          stream = await navigator.mediaDevices.getUserMedia(constraint)
-          console.log('[BarcodeScanner] Camera access successful')
-          break
-        } catch (err) {
-          lastError = err as Error
-          console.warn('[BarcodeScanner] Camera constraint failed:', constraint, err)
-          continue
-        }
-      }
-      
-      if (!stream) {
-        throw lastError || new Error('All camera constraints failed')
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        await videoRef.current.play()
       }
       
       setHasPermission(true)
       setIsInitializing(false)
-      return stream
-    } catch (error: any) {
+    } catch (error) {
       setIsInitializing(false)
-      if (error.message === 'MEDIA_DEVICES_NOT_SUPPORTED') {
-        onError('Camera API not supported. Update your browser.')
-      } else if (error.name === 'NotAllowedError') {
-        setHasPermission(false)
-        onError(`Camera access denied. ${getBrowserInstructions()}`)
+      setHasPermission(false)
+      
+      const errorMessage = error instanceof Error ? error.message : 'Camera access failed'
+      
+      if (errorMessage.includes('NotAllowedError')) {
+        onError('Camera permission denied. Please enable camera access.')
+      } else if (errorMessage.includes('NotFoundError')) {
+        onError('No camera found. Please connect a camera.')
       } else {
-        onError(`Camera error: ${error.message || 'Unknown'}`)
-      }
-      return null
-    }
-  }, [onError, uiOnly])
-
-  const getBrowserInstructions = () => {
-    const ua = navigator.userAgent.toLowerCase()
-    if (ua.includes('chrome') && !ua.includes('edg')) return 'Click the camera icon in the address bar and Allow.'
-    if (ua.includes('firefox')) return 'Click the lock/camera icon in the address bar and Allow.'
-    if (ua.includes('safari') && ua.includes('mobile')) return 'Settings > Safari > Camera: Allow.'
-    if (ua.includes('safari')) return 'Safari > Settings > Websites > Camera: Allow.'
-    if (ua.includes('edg')) return 'Click the lock icon then Allow camera.'
-    return 'Enable camera permission in your browser settings.'
-  }
-
-  const startScanning = useCallback(async () => {
-    if (uiOnly) return
-    if (isScanning || isInitializing) return
-    if (!videoRef.current) return
-    setIsInitializing(true)
-    try {
-      // Reuse existing stream from provider/user gesture if available
-      let stream: MediaStream | null = streamRef.current
-      if (!stream) {
-        const existing = (videoRef.current.srcObject as MediaStream | null) || null
-        if (existing) stream = existing
-      }
-      // If no stream yet, request one (fallback)
-      if (!stream) {
-        const primaryConstraints: MediaStreamConstraints = {
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280, min: 640 },
-            height: { ideal: 720, min: 480 },
-            frameRate: { ideal: 30, min: 15 }
-          }
-        }
-        try {
-          stream = await navigator.mediaDevices.getUserMedia(primaryConstraints)
-        } catch (err: any) {
-          if (err?.name === 'OverconstrainedError') {
-            console.warn('[BarcodeScanner] OverconstrainedError: retrying 640x480@15')
-            const fallbackConstraints: MediaStreamConstraints = {
-              video: {
-                facingMode: { ideal: 'environment' },
-                width: { ideal: 640 },
-                height: { ideal: 480 },
-                frameRate: { ideal: 15, max: 15 }
-              }
-            }
-            stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints)
-          } else {
-            throw err
-          }
-        }
-      }
-      streamRef.current = stream
-      videoRef.current.srcObject = stream
-      await new Promise<void>(res => {
-        const v = videoRef.current!
-        v.addEventListener('loadedmetadata', () => res(), { once: true })
-        setTimeout(() => res(), 800)
-      })
-      if (!readerRef.current) readerRef.current = new BrowserMultiFormatReader()
-      const reader = readerRef.current
-      setIsScanning(true)
-      setIsInitializing(false)
-      recentResultsRef.current = []
-      acceptedRef.current = false
-      reader.decodeFromVideoElementContinuously(videoRef.current!, (result, err) => {
-        if (result) {
-          if (acceptedRef.current) return
-          const text = result.getText()
-          const now = Date.now()
-          recentResultsRef.current = recentResultsRef.current
-            .filter(r => now - r.ts <= 600)
-            .concat({ text, ts: now })
-          const count = recentResultsRef.current.filter(r => r.text === text).length
-          if (count >= 2) {
-            acceptedRef.current = true
-            // normalize & validate common numeric symbologies (UPC/EAN)
-            const { normalized, valid } = normalizeAndValidateBarcode(text)
-            if (isDigitsOnly(normalized) && !valid) {
-              // invalid checksum; keep scanning and prompt user
-              acceptedRef.current = false
-              recentResultsRef.current = []
-              onError('Invalid barcode read (checksum failed). Hold steady and try again.')
-              return
-            }
-            // defer stopping to after callback to avoid hook order issues
-            console.log('[BarcodeScanner] Calling onBarcodeDetected with:', normalized)
-            try { 
-              onBarcodeDetected(normalized as Barcode) 
-            } catch (e) { 
-              console.error('onBarcodeDetected error:', e) 
-            }
-            // Give callback time to complete before stopping
-            setTimeout(() => { 
-              try { 
-                console.log('[BarcodeScanner] Stopping scanner after callback')
-                stopScanning() 
-              } catch {/* ignore */} 
-            }, 50)
-          }
-        } else if (err && !(err instanceof NotFoundException)) {
-          if ((err as any)?.name === 'IndexSizeError') return
-          // Ignore transient decode errors; only surface fatal camera/permission errors
-          if ((import.meta as any).env?.DEV) console.debug('[Scanner decode warning]', (err as any)?.message || err)
-        }
-      })
-    } catch (e: any) {
-      setIsInitializing(false)
-      if (e?.name === 'NotAllowedError') {
-        setHasPermission(false)
-        onError(`Camera access denied. ${getBrowserInstructions()}`)
-      } else {
-        onError(`Camera error: ${e?.message || 'Unknown'}`)
+        onError('Camera initialization failed. Please try again.')
       }
     }
-  }, [uiOnly, isScanning, isInitializing, onBarcodeDetected, onError]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isInitializing, onError])
 
-  const stopScanning = useCallback(() => {
-    setIsScanning(false)
-    setIsInitializing(false)
-    try { readerRef.current?.reset() } catch {/* ignore */}
-    const v = videoRef.current
-    const s = v?.srcObject as MediaStream | null
-    if (s) s.getTracks().forEach(t => { try { t.stop() } catch {/* ignore */} })
-    if (v) v.srcObject = null
-    streamRef.current = null
-  }, [])
-
-  // Ensure cleanup on unmount (including HMR disposals)
-  useEffect(() => {
-    return () => { try { stopScanning() } catch {/* ignore */} }
-  }, [stopScanning])
-
-  // zxingError hook removed in simplified version
-
-  // Auto-start if permission already granted (restores previous UX)
-  useEffect(() => {
-    if (!flagsRef.current.autoStartOnGrant) return
-    if (uiOnly) return
-    if (autoStartedRef.current) return
-    if (hasPermission === true) {
-      autoStartedRef.current = true
-      if (flagsRef.current.verboseDebug) console.debug('[BarcodeScanner] autoStartOnGrant (baseline)')
-      startScanning()
-    }
-  }, [uiOnly, hasPermission, startScanning])
-
-  // Initial mount: check security context and start scanner if requested
-  useEffect(() => {
-    const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
-    const insecure = !window.isSecureContext && !isLocalHost
-    if (insecure) {
-      setNeedsSecureContext(true)
-      return
-    }
-
-    // Production-quality initialization flow
-    const initializeScanner = async () => {
+  // Clean scanning logic
+  const startScanning = useCallback(() => {
+    if (!videoRef.current || !streamRef.current || isScanning) return
+    
+    setIsScanning(true)
+    
+    const reader = new BrowserMultiFormatReader()
+    readerRef.current = reader
+    
+    const scan = async () => {
       try {
-        console.log('[BarcodeScanner] Checking camera permission...')
-        // First check current permission state
-        const permissionState = await checkCameraPermission()
-        console.log('[BarcodeScanner] Permission state:', permissionState)
+        const result = await reader.decodeOnceFromVideoDevice(undefined, videoRef.current!)
         
-        if (permissionState === 'denied') {
-          setHasPermission(false)
-          setPermissionInstructions(getBrowserInstructions())
-          return
-        }
-        
-        if (permissionState === 'granted') {
-          setHasPermission(true)
-        }
-        
-        // If startOnMount requested, proceed with camera initialization
-        if (startOnMount) {
-          console.log('[BarcodeScanner] Starting camera initialization...')
-          
-          if (permissionState === 'granted') {
-            // Permission already granted, start scanning directly
-            console.log('[BarcodeScanner] Permission granted, starting scan directly...')
-            await startScanning()
-          } else {
-            // Need to request permission first
-            console.log('[BarcodeScanner] Requesting camera permission...')
-            const stream = await requestCameraPermission()
-            if (stream) {
-              console.log('[BarcodeScanner] Camera permission granted, starting scan...')
-              await startScanning()
-            } else {
-              console.warn('[BarcodeScanner] Camera permission failed')
-            }
+        if (result) {
+          const barcode = result.getText().trim()
+          if (barcode) {
+            onBarcodeDetected(barcode)
+            return // Success - let parent handle closing
           }
-        } else {
-          console.log('[BarcodeScanner] startOnMount=false, skipping initialization')
         }
       } catch (error) {
-        console.error('[BarcodeScanner] Initialization failed:', error)
-        setIsInitializing(false)
-        onError(`Scanner initialization failed: ${(error as Error).message}`)
+        // Ignore NotFoundException - normal during scanning
+        if (!(error instanceof NotFoundException)) {
+          console.warn('Scan error:', error)
+        }
+      }
+      
+      // Continue scanning
+      if (isScanning && streamRef.current) {
+        requestAnimationFrame(scan)
       }
     }
+    
+    scan()
+  }, [isScanning, onBarcodeDetected])
 
-    initializeScanner()
-  }, [startOnMount, requestCameraPermission, startScanning, onError])
+  // Cleanup function
+  const cleanup = useCallback(() => {
+    setIsScanning(false)
+    
+    if (readerRef.current) {
+      readerRef.current.reset()
+      readerRef.current = null
+    }
+    
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+  }, [])
 
-  // Release start guard when scanner becomes active or initialization ends
-  // Start guard logic removed
-  // Dev diagnostics (guarded against StrictMode duplicate mount)
-  // Diagnostics module removed for baseline
+  // Initialize on mount
+  useEffect(() => {
+    initializeCamera()
+    return cleanup
+  }, [initializeCamera, cleanup])
+
+  // Start scanning when camera is ready
+  useEffect(() => {
+    if (hasPermission && !isInitializing && !isScanning) {
+      startScanning()
+    }
+  }, [hasPermission, isInitializing, isScanning, startScanning])
+
+  // Handle close
+  const handleClose = useCallback(() => {
+    cleanup()
+    onClose()
+  }, [cleanup, onClose])
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" data-testid="barcode-scanner-modal">
-      <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl">
-        <div className="flex items-center justify-between p-4 border-b border-neutral-200">
-          <div className="flex items-center space-x-2">
-            <Scan className="w-5 h-5 text-primary-600" />
-            <h3 className="text-lg font-semibold text-neutral-900">Scan Barcode</h3>
-          </div>
-          <button onClick={() => { stopScanning(); onClose() }} className="text-neutral-400 hover:text-neutral-600 text-2xl transition-colors" data-testid="close-scanner-btn">
-            <X size={24} />
-          </button>
-        </div>
-        <div className="relative aspect-square bg-neutral-900" data-testid="camera-container">
-          <CameraViewport videoRef={videoRef} />
-          <ScannerOverlay isScanning={hasPermission === true && isScanning} isInitializing={isInitializing} />
-          {hasPermission === false && !isScanning && (
-            <PermissionPanel
-              instructions={permissionInstructions || getBrowserInstructions()}
-              onRequest={requestCameraPermission}
-              onClose={onClose}
-              onRefresh={() => { checkCameraPermission().then(state => { if (state === 'granted') setHasPermission(true) }) }}
-              data-testid="permission-panel"
-            />
-          )}
-          {needsSecureContext && <InsecureContextBanner onDismiss={() => setNeedsSecureContext(false)} />}
-          {!needsSecureContext && !isScanning && hasPermission !== false && !isInitializing && (
-            <ReadyPanel
-              hasPermission={hasPermission}
-              onStart={() => {
-                setUserGestureRequested(true)
-                if (!uiOnly) startScanning()
-              }}
-              data-testid="ready-panel"
-            />
-          )}
-          {hasPermission === null && !isInitializing && !isScanning && userGestureRequested && !needsSecureContext && (
-            <div className="absolute inset-0 flex items-center justify-center p-8" data-testid="no-permission-prompt">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Camera className="w-8 h-8 text-neutral-600" />
-                </div>
-                <h4 className="text-xl font-semibold text-neutral-900 mb-2">Camera Required</h4>
-                <p className="text-neutral-600 mb-6 max-w-xs">Barcode scanning requires camera access. Please ensure your device has a camera.</p>
-                <button onClick={requestCameraPermission} className="w-full bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg font-medium transition-colors" data-testid="try-again-btn">Try Again</button>
-              </div>
+    <div className="fixed inset-0 bg-black z-50 flex flex-col">
+      {/* Header */}
+      <div className="flex justify-between items-center p-4 bg-black/80 text-white">
+        <h2 className="text-lg font-semibold">Scan Barcode</h2>
+        <button
+          onClick={handleClose}
+          className="p-2 rounded-full hover:bg-white/20 transition-colors"
+        >
+          <X size={24} />
+        </button>
+      </div>
+
+      {/* Camera viewport */}
+      <div className="flex-1 relative">
+        {isInitializing && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
+            <div className="text-center">
+              <Camera size={48} className="mx-auto mb-4 animate-pulse" />
+              <p>Initializing camera...</p>
             </div>
-          )}
-        </div>
-        <div className="p-4 bg-neutral-50">
-          <div className="flex space-x-3">
-            <button onClick={stopScanning} disabled={!isScanning} className="flex-1 bg-neutral-200 hover:bg-neutral-300 disabled:bg-neutral-100 text-neutral-700 disabled:text-neutral-400 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2" data-testid="stop-scan-btn">
-              <X size={18} /><span>Stop</span>
-            </button>
-            <button onClick={() => { stopScanning(); onClose() }} className="flex-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 px-4 py-3 rounded-lg font-medium transition-colors" data-testid="close-btn">Close</button>
           </div>
-        </div>
+        )}
+
+        {hasPermission === false && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
+            <div className="text-center p-6">
+              <Camera size={48} className="mx-auto mb-4" />
+              <p className="mb-4">Camera access is required to scan barcodes</p>
+              <button
+                onClick={initializeCamera}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+              >
+                Grant Permission
+              </button>
+            </div>
+          </div>
+        )}
+
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover"
+          playsInline
+          muted
+        />
+
+        {/* Scanning overlay */}
+        {isScanning && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-64 h-64 border-2 border-white/50 rounded-lg relative">
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary-400 rounded-tl-lg" />
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary-400 rounded-tr-lg" />
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary-400 rounded-bl-lg" />
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary-400 rounded-br-lg" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Instructions */}
+      <div className="p-4 bg-black/80 text-white text-center">
+        <p className="text-sm">Position barcode within the frame</p>
       </div>
     </div>
   )

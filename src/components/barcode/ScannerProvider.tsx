@@ -1,70 +1,87 @@
-import React from 'react'
-import BarcodeScanner from '@/components/barcode/BarcodeScanner'
-import type { Barcode } from '@/types'
+/**
+ * Scanner Provider - Clean scanner context management
+ * Following style.md: simple provider pattern without over-engineering
+ */
 
-interface ScannerContextValue {
-  open: (onDetected: (code: Barcode) => void) => void
+import React, { createContext, useContext, useState, useCallback } from 'react'
+import BarcodeScanner from './BarcodeScanner'
+
+interface ScannerContextType {
+  isOpen: boolean
+  open: (onResult: (barcode: string) => void) => void
   close: () => void
 }
 
-const ScannerContext = React.createContext<ScannerContextValue | null>(null)
+const ScannerContext = createContext<ScannerContextType | null>(null)
 
-export const useScanner = () => {
-  const ctx = React.useContext(ScannerContext)
-  if (!ctx) throw new Error('useScanner must be used within ScannerProvider')
-  return ctx
+export const useScanner = (): ScannerContextType | null => {
+  return useContext(ScannerContext)
 }
 
-export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [visible, setVisible] = React.useState(false)
-  const openingRef = React.useRef(false)
-  const onDetectedRef = React.useRef<((code: Barcode) => void) | null>(null)
-  const streamRef = React.useRef<MediaStream | null>(null)
+interface ScannerProviderProps {
+  children: React.ReactNode
+}
 
-  const open = React.useCallback(async (onDetected: (code: Barcode) => void) => {
-    if (openingRef.current || visible) return
-    openingRef.current = true
-    try {
-      // Let BarcodeScanner handle getUserMedia to avoid stream conflicts
-      onDetectedRef.current = onDetected
-      setVisible(true)
-    } catch (e) {
-      console.error('ScannerProvider.open failed:', e)
-    } finally {
-      // release opening latch next tick
-      setTimeout(() => { openingRef.current = false }, 0)
-    }
-  }, [visible])
+export const ScannerProvider: React.FC<ScannerProviderProps> = ({ children }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [onResult, setOnResult] = useState<((barcode: string) => void) | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const close = React.useCallback(() => {
-    setVisible(false)
-    onDetectedRef.current = null
-    // BarcodeScanner handles its own stream cleanup
-    streamRef.current = null
+  const open = useCallback((resultCallback: (barcode: string) => void) => {
+    if (isOpen) return // Single-flight guard as per requirements.md
+    
+    setOnResult(() => resultCallback)
+    setError(null)
+    setIsOpen(true)
+  }, [isOpen])
+
+  const close = useCallback(() => {
+    setIsOpen(false)
+    setOnResult(null)
+    setError(null)
   }, [])
 
+  const handleBarcodeDetected = useCallback((barcode: string) => {
+    if (onResult) {
+      onResult(barcode)
+    }
+    close()
+  }, [onResult, close])
+
+  const handleError = useCallback((errorMessage: string) => {
+    setError(errorMessage)
+    // Don't auto-close on error - let user try again or manually close
+  }, [])
+
+  const contextValue: ScannerContextType = {
+    isOpen,
+    open,
+    close
+  }
+
   return (
-    <ScannerContext.Provider value={{ open, close }}>
+    <ScannerContext.Provider value={contextValue}>
       {children}
-      {visible && (
+      {isOpen && (
         <BarcodeScanner
-          startOnMount={true}
-          onBarcodeDetected={(b) => { 
-            try { 
-              console.log('[ScannerProvider] Barcode detected:', b)
-              onDetectedRef.current?.(b) 
-            } catch (e) {
-              console.error('[ScannerProvider] Callback error:', e)
-            }
-            // Don't close immediately - let the callback complete first
-            setTimeout(() => close(), 100)
-          }}
-          onError={() => close()}
-          onClose={() => close()}
+          onBarcodeDetected={handleBarcodeDetected}
+          onError={handleError}
+          onClose={close}
         />
+      )}
+      {error && (
+        <div className="fixed top-4 left-4 right-4 bg-red-50 border border-red-200 rounded-lg p-4 z-50">
+          <div className="text-red-800 text-sm">
+            ⚠️ {error}
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="mt-2 text-red-600 text-sm underline"
+          >
+            Dismiss
+          </button>
+        </div>
       )}
     </ScannerContext.Provider>
   )
 }
-
-

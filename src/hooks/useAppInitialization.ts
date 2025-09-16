@@ -1,40 +1,33 @@
 /**
  * App Initialization Hook - Clean server-first data loading
  * Following requirements.md: Neon as source of truth
+ * Following style.md: single responsibility, clean error handling
  */
 
 import { useEffect } from 'react'
+import { apiService } from '@/services/api.service'
+import { usePantryStore } from '@/stores/pantry.store'
 
 export const useAppInitialization = (): void => {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Import services dynamically to avoid circular dependencies
-        const { ProductRepository } = await import('@/services/ProductRepository')
-        const { usePantryStore } = await import('@/stores/pantry.store')
-        const { getApiBaseUrl } = await import('@/services/apiClient')
-
-        // Initialize repository
-        await ProductRepository.init()
+        // Server-first loading
+        const result = await apiService.getAllItems()
         
-        const baseUrl = getApiBaseUrl()
-        if (baseUrl) {
-          try {
-            // Load from server first (authoritative)
-            const serverItems = await ProductRepository.fetchFromServer()
-            usePantryStore.getState().actions.replaceAll(serverItems)
-          } catch {
-            // Fallback to local storage
-            const localItems = await ProductRepository.hydrateFromLocal()
-            usePantryStore.getState().actions.replaceAll(localItems)
-          }
+        if (result.data) {
+          // Success: use server data as source of truth
+          usePantryStore.getState().actions.replaceAll(result.data)
         } else {
-          // No server configured, use local only
-          const localItems = await ProductRepository.hydrateFromLocal()
-          usePantryStore.getState().actions.replaceAll(localItems)
+          // Server failed: surface error immediately (requirements.md compliance)
+          console.warn('Failed to load from server:', result.error)
+          // Initialize with empty state rather than masking the error
+          usePantryStore.getState().actions.replaceAll([])
         }
       } catch (error) {
         console.error('App initialization failed:', error)
+        // Initialize with empty state
+        usePantryStore.getState().actions.replaceAll([])
       }
     }
 

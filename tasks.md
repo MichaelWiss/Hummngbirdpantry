@@ -297,6 +297,39 @@
 - [ ] Graceful fallback to manual entry when lookup fails
 
 
+## Phase 0: Architecture Cleanup & Consolidation (COMPLETED ✅)
+
+### [x] **✅ COMPLETED: Service Layer Consolidation**
+- Replaced multiple overlapping services with unified `api.service.ts`
+  - Removed: `ProductRepository.ts` (85 lines), `pantryApi.service.ts` (85 lines) 
+  - Removed: `openFoodFacts.service.ts`, `product.service.ts`, `useBarcodeCache.ts` (300 lines)
+  - Unified: Single service with `getAllItems`, `createItem`, `updateItem`, `incrementItem`, `deleteItem`
+  - Server-first pattern: Immediate error surfacing, no fallback masking
+
+### [x] **✅ COMPLETED: Store Architecture Cleanup**
+- Simplified `pantry.store.ts` from 473 to 139 lines (70% reduction)
+- Pure UI-only state management without server operations
+- Clean actions: `replaceAll`, `upsertLocal`, `removeLocal` with filtering
+- Removed mixed concerns and circular dependencies
+
+### [x] **✅ COMPLETED: Component Simplification**
+- `AddItemModal.tsx`: 391 → 184 lines (53% reduction) 
+- Simplified autofill logic and removed complex ProductRepository dependencies
+- Fixed TypeScript strict mode compliance across all components
+- Proper error handling and field validation
+
+### [x] **✅ COMPLETED: Hook Architecture Refactoring**
+- `usePantryActions.ts`: Write-only operations with server-first pattern
+- `usePantryData.ts`: Complete rewrite for read-only data access with computed stats
+- Removed `useBarcodeCache.ts` complexity and consolidated functionality
+- Clean separation of concerns between data and actions
+
+### [x] **✅ COMPLETED: Build & Type Safety Verification**
+- Zero TypeScript errors with strict mode enabled
+- Successful build verification (3.54s, 1711 modules, ~640KB total)
+- Removed all `.old.*` backup files to prevent type conflicts
+- Comprehensive error checking across entire codebase
+
 ## Phase 1: Foundation & Core Setup (2-3 weeks)
 
 ### [x] **✅ COMPLETED: Project Infrastructure Setup**
@@ -347,18 +380,107 @@
 ## Phase 5: Data Management & APIs (2-3 weeks)
 
 ### [ ] Data Persistence & Storage
+- [ ] Update storage patterns to work with unified `api.service.ts`
+- [ ] Remove references to deprecated ProductRepository and pantryApi services
+- [ ] Validate IndexedDB integration with clean store architecture
+- [ ] Test localStorage persistence with simplified state management
 
 ### [ ] External API Integrations
+- [ ] OpenFoodFacts integration refinement in `api.service.ts`
+- [ ] Category mapping and product data normalization
+- [ ] Rate limiting and caching strategies
+- [ ] Fallback handling for API failures
 
 ### [ ] Cloud Synchronization (Optional)
+- [ ] Server API endpoints aligned with clean service architecture
+- [ ] Optimistic updates through unified pantry actions
+- [ ] Conflict resolution with server-first error handling
+- [ ] Background sync integration with simplified store
 
 ## Phase 6: Testing & Quality Assurance (2-3 weeks)
 
-### [ ] Comprehensive Testing Suite
+## Phase 6: Testing & Quality Assurance (2-3 weeks)
 
-### [ ] Voice & Camera Testing
+### [ ] **Unit Testing Suite**
+- [ ] Service Layer Testing
+  - [ ] `api.service.ts` unit tests: CRUD operations, error handling, category mapping
+  - [ ] Mock server responses for consistent test behavior
+  - [ ] Test OpenFoodFacts integration with fallback scenarios
+  - [ ] Validate ApiResponse type safety and error propagation
 
-### [ ] Cross-Platform Testing
+- [ ] Store Testing
+  - [ ] `pantry.store.ts` state management: replaceAll, upsertLocal, removeLocal
+  - [ ] Filter functionality with search terms and categories
+  - [ ] LocalStorage persistence behavior
+  - [ ] State cleanup and initialization
+
+- [ ] Hook Testing
+  - [ ] `usePantryActions.ts`: Server-first operations with proper error handling
+  - [ ] `usePantryData.ts`: Computed statistics and filtered data derivation
+  - [ ] Mock API responses for optimistic updates and error scenarios
+  - [ ] Hook cleanup and dependency tracking
+
+### [ ] **Component Testing Suite**
+- [ ] Core Components
+  - [ ] `AddItemModal.tsx`: Form validation, autofill behavior, API integration
+  - [ ] `PantryView.tsx`: Item rendering, filtering, sorting, actions
+  - [ ] `BarcodeScanner.tsx`: Camera permissions, decode results, error states
+  - [ ] Modal management and overlay behaviors
+
+- [ ] Accessibility Testing
+  - [ ] Screen reader compatibility for all interactive elements
+  - [ ] Keyboard navigation support
+  - [ ] Focus management in modals and scanner
+  - [ ] ARIA labels and semantic HTML structure
+
+### [ ] **Integration Testing**
+- [ ] API Integration
+  - [ ] End-to-end pantry operations: create → read → update → delete
+  - [ ] Barcode lookup flow: scan → fetch → autofill → save
+  - [ ] Error handling across service boundaries
+  - [ ] Offline behavior and error states
+
+- [ ] State Management Integration
+  - [ ] Store-hook synchronization under concurrent operations
+  - [ ] Optimistic updates with server reconciliation
+  - [ ] Filter and search performance with large datasets
+  - [ ] LocalStorage persistence across sessions
+
+### [ ] **Mobile & Scanner Testing**
+- [ ] Camera & Scanner Testing
+  - [ ] Camera permission flow on iOS/Android
+  - [ ] Barcode decode accuracy with various formats (UPC, EAN, etc.)
+  - [ ] Camera resource cleanup and memory management
+  - [ ] Secure context requirements (HTTPS) validation
+
+- [ ] Device Compatibility
+  - [ ] iOS WebKit secure context validation
+  - [ ] Android Chrome camera constraints
+  - [ ] Desktop browser fallbacks
+  - [ ] Touch interactions and responsive breakpoints
+
+### [ ] **Performance Testing**
+- [ ] Load Testing
+  - [ ] Large pantry dataset rendering (500+ items)
+  - [ ] Search and filter performance benchmarks
+  - [ ] Memory usage monitoring during scanner operations
+  - [ ] Bundle size analysis post-cleanup
+
+- [ ] User Experience Metrics
+  - [ ] Time to first barcode decode (<2s in good light)
+  - [ ] Modal open/close animation smoothness
+  - [ ] Touch response times on mobile devices
+  - [ ] Network error recovery time
+
+### [ ] **Cross-Platform Testing**
+
+### [ ] **Test Automation & CI/CD**
+- [ ] Jest configuration with React Testing Library
+- [ ] Vitest setup for service layer unit tests  
+- [ ] Mock Service Worker (MSW) for API testing
+- [ ] GitHub Actions workflow: lint → typecheck → test → build
+- [ ] Test coverage reporting and quality gates (>80% coverage)
+- [ ] Automated accessibility testing with axe-core
 
 ## Phase 7: Performance & Optimization (2-3 weeks)
 
@@ -371,6 +493,23 @@
 ## Phase 8: Documentation & Deployment (1-2 weeks)
 
 ### [ ] Documentation Creation
+- [ ] **Architecture Documentation**
+  - [ ] Clean architecture overview: unified services, UI-only store, server-first patterns
+  - [ ] Service layer documentation for `api.service.ts` methods and error handling  
+  - [ ] Store architecture guide: state management without server operations
+  - [ ] Hook patterns: separation of data access (`usePantryData`) and actions (`usePantryActions`)
+  
+- [ ] **Developer Documentation**
+  - [ ] Component integration guide with new hook patterns
+  - [ ] TypeScript strict mode compliance guidelines
+  - [ ] Error handling patterns and server-first principles
+  - [ ] Testing strategy documentation for clean architecture
+  
+- [ ] **Setup & Troubleshooting**
+  - [ ] README: setup, HTTPS on device, known limitations, troubleshooting
+  - [ ] Component READMEs for scanner and data services
+  - [ ] Change log and migration notes for architecture cleanup
+  - [ ] Performance optimization guide post-consolidation
 
 ### [ ] Deployment & Production Setup
 

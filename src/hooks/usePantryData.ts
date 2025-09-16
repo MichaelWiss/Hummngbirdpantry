@@ -1,99 +1,70 @@
-// usePantryData Hook - Read-only pantry data access
-// Follows style.md principles: Single Responsibility, Readability First
+/**
+ * usePantryData Hook - Clean read-only pantry data access
+ * Following style.md: single responsibility, clean computed values
+ * Following requirements.md: UI state derivation from server data
+ */
 
 import { useMemo } from 'react'
 import { usePantryStore } from '@/stores/pantry.store'
-import type { ItemCategory, ItemStatus } from '@/types'
 
 /**
- * Read-only hook for pantry data and computed values
- * Provides clean access to pantry state without write operations
+ * Read-only hook for pantry data and computed stats
  */
 export const usePantryData = () => {
   const store = usePantryStore()
+  const { items, searchQuery, selectedCategory } = store
+  const { getFilteredItems, setSearchQuery } = store.actions
 
-  // Memoized computed values for performance
-  const stats = useMemo(() => ({
-    totalItems: store.totalItems,
-    expiringSoonCount: store.expiringSoonCount,
-    expiredCount: store.expiredCount,
-    lowStockCount: store.lowStockCount,
-    selectedCount: store.selectedItems.length
-  }), [
-    store.totalItems,
-    store.expiringSoonCount,
-    store.expiredCount,
-    store.lowStockCount,
-    store.selectedItems.length
-  ])
+  // Compute stats from items
+  const stats = useMemo(() => {
+    const now = new Date()
+    const filteredItems = getFilteredItems()
+    
+    return {
+      total: items.length,
+      filtered: filteredItems.length,
+      expiringSoon: items.filter(item => {
+        if (!item.expirationDate) return false
+        const daysUntilExpiration = Math.ceil((item.expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        return daysUntilExpiration > 0 && daysUntilExpiration <= 3
+      }).length,
+      expired: items.filter(item => {
+        if (!item.expirationDate) return false
+        return item.expirationDate < now
+      }).length,
+      lowStock: items.filter(item => item.quantity <= 2).length
+    }
+  }, [items, getFilteredItems])
 
-  // Memoized filter helpers
-  const hasActiveFilters = useMemo(() => {
-    const { filters, searchQuery } = store
-    return (
-      filters.categories.length > 0 ||
-      filters.status.length > 0 ||
-      searchQuery.trim().length > 0 ||
-      filters.dateRange !== undefined
-    )
-  }, [store.filters, store.searchQuery])
+  // Get filtered items for display
+  const filteredItems = useMemo(() => getFilteredItems(), [getFilteredItems])
 
   return {
-    // Core data (read-only)
-    items: store.items,
-    filteredItems: store.filteredItems,
+    // Raw data
+    items,
+    filteredItems,
     
-    // UI state (read-only)
-    filters: store.filters,
-    sortBy: store.sortBy,
-    selectedItems: store.selectedItems,
-    searchQuery: store.searchQuery,
-    
-    // Status (read-only)
-    loading: store.loading,
-    error: store.error,
-    
-    // Computed values
+    // Computed stats
     stats,
-    hasActiveFilters,
     
-    // UI helpers (read-only operations)
-    setFilters: store.actions.setFilters,
-    setSortBy: store.actions.setSortBy,
-    setSearchQuery: store.actions.setSearchQuery,
-    selectItem: store.actions.selectItem,
-    selectItems: store.actions.selectItems,
-    clearSelection: store.actions.clearSelection,
-    clearError: store.actions.clearError,
-    resetFilters: store.actions.resetFilters
+    // UI state
+    searchQuery,
+    selectedCategory,
+    
+    // Loading state (always false since we're client-only now)
+    loading: false,
+    error: null,
+    
+    // Actions
+    setSearchQuery,
+    clearError: () => {} // No-op since we don't have errors in the clean store
   }
 }
 
 /**
- * Specialized hook for pantry statistics only
- * Optimized for components that only need stats
+ * Hook for pantry statistics only
  */
 export const usePantryStats = () => {
   const { stats } = usePantryData()
   return stats
-}
-
-/**
- * Specialized hook for pantry filters
- * Optimized for filter components
- */
-export const usePantryFilters = () => {
-  const { 
-    filters, 
-    hasActiveFilters, 
-    setFilters, 
-    resetFilters 
-  } = usePantryData()
-  
-  return {
-    filters,
-    hasActiveFilters,
-    setFilters,
-    resetFilters
-  }
 }

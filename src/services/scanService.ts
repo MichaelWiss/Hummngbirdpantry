@@ -4,7 +4,7 @@
  */
 
 import type { Barcode, ItemCategory, MeasurementUnit } from '@/types'
-import { getApiBaseUrl } from './apiClient'
+import { apiService } from './api.service'
 
 interface ScanResult {
   type: 'increment' | 'add-form'
@@ -23,38 +23,30 @@ interface ScanResult {
  */
 export const processScanResult = async (barcode: string): Promise<ScanResult> => {
   const typedBarcode = barcode as Barcode
-  const baseUrl = getApiBaseUrl()
-  
-  if (!baseUrl) {
-    return {
-      type: 'add-form',
-      data: { barcode: typedBarcode }
-    }
-  }
 
   try {
     // Step 1: Try to increment existing item on server
-    const { ProductRepository } = await import('./ProductRepository')
-    await ProductRepository.increment(typedBarcode, 1)
-    return { type: 'increment' }
+    const incrementResult = await apiService.incrementItem(typedBarcode, 1)
+    if (incrementResult.data) {
+      return { type: 'increment' }
+    }
   } catch {
     // Item not found on server, continue to lookup
   }
 
   try {
     // Step 2: Get product info from Open Food Facts
-    const { lookupProductByBarcode } = await import('./productLookup')
-    const productData = await lookupProductByBarcode(typedBarcode)
+    const lookupResult = await apiService.lookupProduct(typedBarcode)
     
-    if (productData) {
+    if (lookupResult.data) {
       return {
         type: 'add-form',
         data: {
           barcode: typedBarcode,
-          name: productData.name,
-          category: productData.category,
+          name: lookupResult.data.name,
+          category: lookupResult.data.category,
           unit: 'pieces' as MeasurementUnit,
-          ...(productData.brand && { brand: productData.brand })
+          ...(lookupResult.data.brand && { brand: lookupResult.data.brand })
         }
       }
     }

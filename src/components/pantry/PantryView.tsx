@@ -145,7 +145,7 @@ const PantryView: React.FC = () => {
       )}
 
       {/* Loading State */}
-      {loading === 'loading' && (
+      {loading && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 md:p-4">
           <div className="flex items-center space-x-2">
             <div className="animate-spin w-5 h-5 md:w-4 md:h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
@@ -156,7 +156,7 @@ const PantryView: React.FC = () => {
 
       {/* Items Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredItems.map((item) => (
+        {filteredItems.map((item: any) => (
           <PantryItemCard key={item.id} item={item} />
         ))}
       </div>
