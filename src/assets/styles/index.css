@@ -272,6 +272,37 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Button variants */
+.button-primary {
+  background-color: var(--color-primary-500);
+  color: white;
+  padding: var(--spacing-3) var(--spacing-4);
+}
+
+.button-primary:hover:not(:disabled) {
+  background-color: var(--color-primary-600);
+}
+
+.button-danger {
+  background-color: var(--color-expired);
+  color: white;
+  padding: var(--spacing-3) var(--spacing-4);
+}
+
+.button-danger:hover:not(:disabled) {
+  background-color: var(--color-produce-beet-dark);
+}
+
+.button-secondary {
+  background-color: var(--color-neutral-200);
+  color: var(--color-neutral-900);
+  padding: var(--spacing-3) var(--spacing-4);
+}
+
+.button-secondary:hover:not(:disabled) {
+  background-color: var(--color-neutral-300);
+}
+
 /* ==========================================================================
    LAYOUT UTILITIES
    ========================================================================== */
