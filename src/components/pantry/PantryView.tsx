@@ -73,7 +73,7 @@ const PantryItemCard = ({ item }: { item: PantryItem }) => {
         onClick={handleSubtract}
         className="button button-danger w-full"
       >
-        Subtract
+        Delete One Item
       </button>
     </div>
   )
