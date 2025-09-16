@@ -37,7 +37,13 @@ export const usePantryData = () => {
   }, [items, getFilteredItems])
 
   // Get filtered items for display
-  const filteredItems = useMemo(() => getFilteredItems(), [getFilteredItems])
+  const filteredItems = usePantryStore((state) => {
+    return state.items.filter((item) => {
+      const matchesSearch = state.searchQuery === '' || item.name.toLowerCase().includes(state.searchQuery.toLowerCase())
+      const matchesCategory = state.selectedCategory === 'all' || item.category === state.selectedCategory
+      return matchesSearch && matchesCategory
+    })
+  })
 
   return {
     // Raw data
