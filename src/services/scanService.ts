@@ -7,7 +7,7 @@ import type { Barcode, ItemCategory, MeasurementUnit } from '@/types'
 import { apiService } from './api.service'
 
 interface ScanResult {
-  type: 'increment' | 'add-form'
+  type: 'add-form'
   data?: {
     barcode: Barcode
     name?: string
@@ -19,23 +19,13 @@ interface ScanResult {
 
 /**
  * Process scanned barcode following requirements pipeline
- * Returns action to take: increment existing item or show add form
+ * Always returns add-form to show autofill data for every scan
  */
 export const processScanResult = async (barcode: string): Promise<ScanResult> => {
   const typedBarcode = barcode as Barcode
 
   try {
-    // Step 1: Try to increment existing item on server
-    const incrementResult = await apiService.incrementItem(typedBarcode, 1)
-    if (incrementResult.data) {
-      return { type: 'increment' }
-    }
-  } catch {
-    // Item not found on server, continue to lookup
-  }
-
-  try {
-    // Step 2: Get product info from Open Food Facts
+    // Step 1: Get product info from Open Food Facts
     const lookupResult = await apiService.lookupProduct(typedBarcode)
     
     if (lookupResult.data) {
@@ -54,7 +44,7 @@ export const processScanResult = async (barcode: string): Promise<ScanResult> =>
     // OFF lookup failed, continue to manual
   }
 
-  // Step 3: Manual entry with barcode prefilled
+  // Step 2: Manual entry with barcode prefilled
   return {
     type: 'add-form',
     data: { barcode: typedBarcode }

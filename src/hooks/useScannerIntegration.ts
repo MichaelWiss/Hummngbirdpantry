@@ -25,13 +25,7 @@ export function useScannerIntegration({ onScanSuccess, onScanError }: ScannerInt
     try {
       const result = await processScanResult(barcode)
       
-      if (result.type === 'increment') {
-        // Item incremented successfully, scanner will close automatically
-        onScanSuccess()
-        return
-      }
-      
-      // Show add form with data
+      // Always show add form with data (no more auto-increment)
       onScanSuccess(result.data)
     } catch (error) {
       console.error('Scan processing failed:', error)
