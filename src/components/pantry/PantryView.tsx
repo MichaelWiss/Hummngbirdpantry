@@ -34,7 +34,7 @@ const PantryItemCard = React.memo<{ item: PantryItem }>(({ item }) => {
 
   const handleSubtract = () => {
     if (item.quantity > 0) {
-      update(item.id, { quantity: item.quantity - 1 })
+      update(item.id, { quantity: Math.max(0, item.quantity - 1) })
     }
   }
 
