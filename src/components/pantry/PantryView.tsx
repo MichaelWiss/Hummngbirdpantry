@@ -33,8 +33,11 @@ const PantryItemCard = React.memo<{ item: PantryItem }>(({ item }) => {
   }
 
   const handleSubtract = () => {
+    console.log('Subtract button clicked for item:', item)
     if (item.quantity > 0) {
       update(item.id, { quantity: Math.max(0, item.quantity - 1) })
+        .then(() => console.log('Quantity updated successfully'))
+        .catch((error) => console.error('Failed to update quantity:', error))
     }
   }
 

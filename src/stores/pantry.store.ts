@@ -59,7 +59,8 @@ export const usePantryStore = create<PantryStore>()(
           }),
 
         // Add or update single item (used by mutations)
-        upsertLocal: (item) =>
+        upsertLocal: (item) => {
+          console.log('upsertLocal called with item:', item)
           set((state) => {
             const existingIndex = state.items.findIndex(i => i.id === item.id)
             if (existingIndex >= 0) {
@@ -67,7 +68,8 @@ export const usePantryStore = create<PantryStore>()(
             } else {
               state.items.push(item)
             }
-          }),
+          })
+        },
 
         // Remove item from local state
         removeLocal: (id) =>
