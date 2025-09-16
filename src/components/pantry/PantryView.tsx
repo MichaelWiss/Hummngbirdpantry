@@ -71,7 +71,7 @@ const PantryItemCard = ({ item }: { item: PantryItem }) => {
 
       <button
         onClick={handleSubtract}
-        className="mt-4 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition"
+        className="button button-danger"
       >
         Subtract
       </button>
@@ -103,7 +103,7 @@ const PantryView: React.FC = () => {
   // const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
 
   return (
-    <div className="space-y-6 md:space-y-8 max-w-7xl mx-auto px-4 sm:px-0">
+    <div className="pantry-view space-y-6 md:space-y-8 max-w-7xl mx-auto px-4 sm:px-0 pb-16">
       {/* Page Title */}
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-neutral-900 mb-2">My Pantry</h2>
