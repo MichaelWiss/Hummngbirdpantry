@@ -55,29 +55,17 @@ export const usePantryStore = create<PantryStore>()(
         // Replace all items (used by data loading)
         replaceAll: (items) =>
           set((state) => {
-            // Normalize items to ensure all have required fields
-            state.items = items.map(item => ({
-              ...item,
-              status: item.status || 'fresh', // Ensure status exists
-              tags: item.tags || []           // Ensure tags array exists
-            }))
+            state.items = items
           }),
 
         // Add or update single item (used by mutations)
         upsertLocal: (item) =>
           set((state) => {
-            // Normalize item to ensure required fields
-            const normalizedItem = {
-              ...item,
-              status: item.status || 'fresh',
-              tags: item.tags || []
-            }
-            
-            const existingIndex = state.items.findIndex(i => i.id === normalizedItem.id)
+            const existingIndex = state.items.findIndex(i => i.id === item.id)
             if (existingIndex >= 0) {
-              state.items[existingIndex] = normalizedItem
+              state.items[existingIndex] = item
             } else {
-              state.items.push(normalizedItem)
+              state.items.push(item)
             }
           }),
 

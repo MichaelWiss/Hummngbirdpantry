@@ -38,7 +38,7 @@ type AutofillStatus = 'none' | 'loading' | 'found' | 'not-found'
 const CATEGORIES: ItemCategory[] = ['dairy', 'meat', 'produce', 'bakery', 'pantry', 'frozen', 'beverages', 'snacks', 'spices', 'condiments', 'canned', 'other']
 const UNITS: MeasurementUnit[] = ['pieces', 'lbs', 'kg', 'oz', 'g', 'cups', 'tbsp', 'tsp', 'ml', 'l', 'cans', 'bottles', 'packages']
 
-export const AddItemModal: React.FC<AddItemModalProps> = ({ 
+export const AddItemModal = React.memo<AddItemModalProps>(({ 
   onClose, 
   onOpenScanner, 
   initialData = {} 
@@ -366,4 +366,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
       </div>
     </div>
   )
-}
+})
+
+// Add display name for debugging
+AddItemModal.displayName = 'AddItemModal'

@@ -11,8 +11,8 @@ import { usePantryData, usePantryStats } from '@/hooks/usePantryData'
 // import AddItemModal from '@/components/pantry/AddItemModal'
 import type { PantryItem } from '@/types'
 
-// PantryItemCard Component
-const PantryItemCard: React.FC<{ item: PantryItem }> = ({ item }) => {
+// PantryItemCard Component - Memoized for performance
+const PantryItemCard = React.memo<{ item: PantryItem }>(({ item }) => {
   const getStatusColor = (status?: string) => {
     switch (status) {
       case 'fresh': return 'bg-green-100 text-green-800'
@@ -58,7 +58,10 @@ const PantryItemCard: React.FC<{ item: PantryItem }> = ({ item }) => {
       </div>
     </div>
   )
-}
+})
+
+// Add display name for debugging
+PantryItemCard.displayName = 'PantryItemCard'
 
 // ============================================================================
 // MAIN PANTRY VIEW COMPONENT

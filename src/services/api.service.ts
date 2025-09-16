@@ -43,7 +43,13 @@ class ApiService {
       }
 
       const data = await response.json()
-      return { data }
+      // Ensure server items have required fields
+      const normalizedData = data.map((item: any) => ({
+        ...item,
+        status: item.status || 'fresh',
+        tags: item.tags || []
+      }))
+      return { data: normalizedData }
     } catch (error) {
       return { error: `Network error: ${error instanceof Error ? error.message : 'Unknown'}` }
     }

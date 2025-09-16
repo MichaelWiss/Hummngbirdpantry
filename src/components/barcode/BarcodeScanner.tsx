@@ -13,7 +13,7 @@ interface BarcodeScannerProps {
   onClose: () => void
 }
 
-const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
+const BarcodeScanner = React.memo<BarcodeScannerProps>(({
   onBarcodeDetected,
   onError,
   onClose
@@ -208,6 +208,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       </div>
     </div>
   )
-}
+})
+
+// Add display name for debugging
+BarcodeScanner.displayName = 'BarcodeScanner'
 
 export default BarcodeScanner
