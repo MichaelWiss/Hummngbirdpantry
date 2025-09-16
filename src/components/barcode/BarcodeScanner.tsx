@@ -29,43 +29,7 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
   const streamRef = useRef<MediaStream | null>(null)
   const initializingRef = useRef(false) // Prevent multiple initializations
 
-  // Clean scanning logic
-  const startScanning = useCallback(() => {
-    if (!videoRef.current || !streamRef.current || isScanning) return
-    
-    setIsScanning(true)
-    
-    const reader = new BrowserMultiFormatReader()
-    readerRef.current = reader
-    
-    const scan = async () => {
-      try {
-        const result = await reader.decodeOnceFromVideoDevice(undefined, videoRef.current!)
-        
-        if (result) {
-          const barcode = result.getText().trim()
-          if (barcode) {
-            onBarcodeDetected(barcode)
-            return // Success - let parent handle closing
-          }
-        }
-      } catch (error) {
-        // Ignore NotFoundException - normal during scanning
-        if (!(error instanceof NotFoundException)) {
-          console.warn('Scan error:', error)
-        }
-      }
-      
-      // Continue scanning
-      if (isScanning && streamRef.current) {
-        requestAnimationFrame(scan)
-      }
-    }
-    
-    scan()
-  }, [isScanning, onBarcodeDetected])
-
-  // Handle close with inline cleanup
+  // Initialize on mount only
   useEffect(() => {
     let mounted = true
     const currentVideo = videoRef.current // Capture ref for cleanup
@@ -142,9 +106,41 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
   // Start scanning when camera is ready
   useEffect(() => {
     if (hasPermission && !isInitializing && !isScanning) {
-      startScanning()
+      // Inline scanning logic to avoid callback dependency loop
+      if (!videoRef.current || !streamRef.current) return
+      
+      setIsScanning(true)
+      
+      const reader = new BrowserMultiFormatReader()
+      readerRef.current = reader
+      
+      const scan = async () => {
+        try {
+          const result = await reader.decodeOnceFromVideoDevice(undefined, videoRef.current!)
+          
+          if (result) {
+            const barcode = result.getText().trim()
+            if (barcode) {
+              onBarcodeDetected(barcode)
+              return // Success - let parent handle closing
+            }
+          }
+        } catch (error) {
+          // Ignore NotFoundException - normal during scanning
+          if (!(error instanceof NotFoundException)) {
+            console.warn('Scan error:', error)
+          }
+        }
+        
+        // Continue scanning if still active
+        if (readerRef.current && streamRef.current) {
+          requestAnimationFrame(scan)
+        }
+      }
+      
+      scan()
     }
-  }, [hasPermission, isInitializing, isScanning, startScanning])
+  }, [hasPermission, isInitializing, isScanning, onBarcodeDetected])
 
   // Handle close with inline cleanup
   const handleClose = useCallback(() => {
