@@ -39,6 +39,10 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
         initializingRef.current = true // Set flag to prevent multiple initializations
         
         try {
+          console.log('🎥 Starting camera initialization...')
+          console.log('📱 Navigator mediaDevices available:', !!navigator.mediaDevices)
+          console.log('🔒 Secure context:', window.isSecureContext)
+          
           // Direct camera initialization to avoid callback dependencies
           const stream = await navigator.mediaDevices.getUserMedia({
             video: {
@@ -48,7 +52,16 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
             }
           })
           
+          console.log('✅ Got media stream:', stream)
+          console.log('🎬 Stream tracks:', stream.getTracks().map(t => ({
+            kind: t.kind,
+            label: t.label,
+            enabled: t.enabled,
+            readyState: t.readyState
+          })))
+          
           if (!mounted) {
+            console.log('❌ Component unmounted, stopping stream')
             stream.getTracks().forEach(track => track.stop())
             return
           }
@@ -56,25 +69,38 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
           streamRef.current = stream
           
           if (videoRef.current) {
+            console.log('📺 Setting video srcObject and playing...')
             videoRef.current.srcObject = stream
             await videoRef.current.play()
+            console.log('▶️ Video playing successfully')
           }
           
           setHasPermission(true)
           setIsInitializing(false)
+          console.log('✅ Camera initialization complete')
         } catch (error) {
+          console.error('❌ Camera initialization failed:', error)
           if (mounted) {
             setIsInitializing(false)
             setHasPermission(false)
             
             const errorMessage = error instanceof Error ? error.message : 'Camera access failed'
+            console.log('🔍 Error details:', {
+              name: error instanceof Error ? error.name : 'Unknown',
+              message: errorMessage,
+              stack: error instanceof Error ? error.stack : undefined
+            })
             
-            if (errorMessage.includes('NotAllowedError')) {
+            if (errorMessage.includes('NotAllowedError') || (error as any)?.name === 'NotAllowedError') {
               onError('Camera permission denied. Please enable camera access.')
-            } else if (errorMessage.includes('NotFoundError')) {
+            } else if (errorMessage.includes('NotFoundError') || (error as any)?.name === 'NotFoundError') {
               onError('No camera found. Please connect a camera.')
+            } else if (errorMessage.includes('NotReadableError') || (error as any)?.name === 'NotReadableError') {
+              onError('Camera is already in use by another application.')
+            } else if (errorMessage.includes('OverconstrainedError') || (error as any)?.name === 'OverconstrainedError') {
+              onError('Camera does not support the requested settings.')
             } else {
-              onError('Camera initialization failed. Please try again.')
+              onError(`Camera initialization failed: ${errorMessage}`)
             }
           }
         } finally {

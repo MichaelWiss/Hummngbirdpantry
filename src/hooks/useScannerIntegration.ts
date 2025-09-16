@@ -41,9 +41,12 @@ export function useScannerIntegration({ onScanSuccess, onScanError }: ScannerInt
   }, [onScanSuccess, onScanError])
 
   const openScanner = useCallback(() => {
+    console.log('🔍 openScanner called, scannerCtx:', scannerCtx)
     if (scannerCtx) {
+      console.log('✅ Opening scanner modal...')
       scannerCtx.open(handleScanResult)
     } else {
+      console.error('❌ Scanner not available - context is null')
       onScanError('Scanner not available')
     }
   }, [scannerCtx, handleScanResult, onScanError])
