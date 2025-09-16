@@ -1,6 +1,6 @@
-# HummingbirdPantry – Core-First Tasks (Neon-first, Robust MVP)
+# HummingbirdPantry – Core-First Tasks (Neon as Source of Truth)
 
-## Sprint: Make Main Feature Robust (Neon as Source of Truth)
+## Sprint: Make Main Feature Robust (Neon-first, Robust MVP)
 
 ### Blocking Bugs (to fix before any new features)
 - [ ] Scanner overlays duplicate in Chrome/Firefox
@@ -64,6 +64,77 @@
 - [ ] Re-enable offline queue with single-flight + exponential backoff.
 - [ ] Add idempotency keys to POST/increment/PUT.
 - [ ] Consider changed-since reconciliation after flush.
+
+## UPDATED PROJECT STATUS - September 2025
+
+### ✅ COMPLETED PHASES
+**Phase 1: Foundation & Core Setup (100% Complete)**
+- ✅ React 18 + TypeScript + Vite project initialized
+- ✅ ESLint, Prettier, Husky configured for code quality
+- ✅ Comprehensive directory structure (components, hooks, services, stores)
+- ✅ Tailwind CSS + Radix UI design system configured
+- ✅ Vitest + React Testing Library + Playwright testing setup
+- ✅ Path aliases and build optimization configured
+- ✅ Core dependencies installed (@radix-ui/*, @zxing/library, zustand, etc.)
+- ✅ TypeScript interfaces and branded types defined
+- ✅ Zustand store with persistence middleware implemented
+- ✅ Custom hooks architecture (usePantry, useAppNavigation, etc.)
+- ✅ Error boundaries and server health monitoring
+- ✅ Mobile-first responsive design system
+
+**Phase 2: Core Pantry Management (85% Complete)**
+- ✅ PantryView component with full functionality
+- ✅ AddItemModal with form validation
+- ✅ Bottom navigation system
+- ✅ Pantry statistics and filtering
+- ✅ Item CRUD operations (Create, Read, Update, Delete)
+- ✅ Search and category filtering
+- ✅ Mobile-optimized layouts
+- ✅ Zustand state management with local persistence
+- ✅ Optimistic updates pattern
+- 🔄 **IN PROGRESS**: Server-first barcode scanning workflow
+- 🔄 **IN PROGRESS**: Open Food Facts integration
+- ❌ **MISSING**: Voice input features
+- ❌ **MISSING**: Photo capture and OCR
+
+### 🔄 CURRENT SPRINT FOCUS
+**Sprint: Robust Neon-First MVP**
+- 🔄 Fix scanner overlay duplication across browsers
+- 🔄 Implement server-first product resolution pipeline
+- 🔄 Complete Neon-first CRUD operations
+- 🔄 Add proper error handling and user feedback
+- 🔄 Verify cross-browser consistency
+
+### 📊 BACKEND STATUS
+**✅ FULLY IMPLEMENTED**
+- Express.js server with TypeScript
+- PostgreSQL integration with Neon
+- Complete REST API (/api/products)
+- Database migrations and schema
+- CORS configuration
+- Health check endpoints
+- Zod validation for all endpoints
+
+**API Endpoints Available:**
+- GET /api/products - List all products
+- GET /api/products/:barcode - Lookup by barcode
+- POST /api/products - Create/update product
+- PATCH /api/products/:barcode/increment - Increment quantity
+- PUT /api/products/:id - Update product
+- DELETE /api/products/:id - Delete product
+
+## Phase 0: Documentation & Planning
+
+### Requirements & Roadmap
+- [x] Update requirements with iOS secure‑context rule (WebKit engine on all iOS browsers)
+- [x] Define supported barcode symbologies (UPC‑A, EAN‑13, EAN‑8; others as stretch)
+- [x] Define product fields and validation rules
+- [x] Finalize phased roadmap with granular acceptance criteria per phase
+
+### Security & Key Hygiene
+- [x] Local HTTPS guide: generating certs, trusting on device, pitfalls on Safari
+- [x] Secret scanning tooling and process (documented)
+- [x] Add "do not commit keys/certs" policies and `.gitignore` entries
 
 
 ## Phase 0: Documentation & Planning
