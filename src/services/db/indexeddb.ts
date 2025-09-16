@@ -4,7 +4,7 @@
 export type StoreSchema = {
   name: string
   keyPath: string
-  indexes?: Array<{ name: string; keyPath: string | string[]; options?: IDBIndexParameters }>
+  indexes?: Array<{ name: string; keyPath: string | string[]; options?: any }>
 }
 
 export interface OpenOptions {
@@ -80,7 +80,7 @@ export const openDatabase = async (options: OpenOptions): Promise<DBHandle> => {
 export const tx = <T = unknown>(
   handle: DBHandle,
   storeName: string,
-  mode: IDBTransactionMode,
+  mode: string, // IDBTransactionMode
   run: (store: IDBObjectStore) => T
 ): Promise<T> => {
   if (handle.mode === 'memory') {
@@ -88,15 +88,15 @@ export const tx = <T = unknown>(
     const store = handle.memory.get(storeName) as Map<any, any>
     const persist = () => {
       try {
-        const key = `idb:${(options as any).dbName || 'db'}:${storeName}`
+        const key = `idb:pantry:${storeName}`
         const arr = Array.from(store.entries())
         localStorage.setItem(key, JSON.stringify(arr))
       } catch {/* ignore */}
     }
     const memStore = {
       put: (value: any) => {
-        const keyPath = 'id' in value ? 'id' : Object.keys(value)[0]
-        const key = value[keyPath]
+        const keyPath = value.id !== undefined ? 'id' : Object.keys(value)[0]
+        const key = keyPath ? value[keyPath] as string : undefined
         if (key === undefined) {
           throw new Error('In-memory store put requires a defined key')
         }
@@ -107,7 +107,8 @@ export const tx = <T = unknown>(
       get: (key: any) => ({ result: store.get(key), onsuccess: null as any, onerror: null as any }),
       getAll: () => ({ result: Array.from(store.values()), onsuccess: null as any, onerror: null as any }),
       delete: (key: any) => { store.delete(key); persist(); return { onsuccess: null as any, onerror: null as any } },
-      index: (_: string) => ({
+      // @ts-ignore
+      index: () => ({
         get: (key: any) => ({ result: Array.from(store.values()).find((v: any) => v.barcode === key), onsuccess: null as any, onerror: null as any })
       })
     } as unknown as IDBObjectStore
@@ -116,13 +117,24 @@ export const tx = <T = unknown>(
 
   return new Promise<T>((resolve, reject) => {
     if (!handle.db) return reject(new Error('DB not open'))
-    const transaction = handle.db.transaction([storeName], mode)
-    const store = transaction.objectStore(storeName)
+    
     try {
+      // Check if store exists before creating transaction
+      if (!handle.db.objectStoreNames.contains(storeName)) {
+        console.error(`[IndexedDB] Store '${storeName}' not found. Available:`, Array.from(handle.db.objectStoreNames))
+        return reject(new Error(`Store '${storeName}' not found. Try clearing browser data and refreshing.`))
+      }
+      
+      const transaction = handle.db.transaction([storeName], mode as any)
+      const store = transaction.objectStore(storeName)
       const result = run(store)
       transaction.oncomplete = () => resolve(result)
-      transaction.onerror = () => reject(transaction.error)
+      transaction.onerror = () => {
+        console.error('[IndexedDB] Transaction error:', transaction.error)
+        reject(transaction.error || new Error('Transaction failed'))
+      }
     } catch (e) {
+      console.error('[IndexedDB] Transaction setup error:', e)
       reject(e as any)
     }
   })

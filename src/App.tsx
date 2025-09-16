@@ -1,289 +1,127 @@
-// Main App component for HummingbirdPantry
-// This component serves as the root of our React application
+/**
+ * App - Main application component
+ * Clean implementation following style.md and requirements.md
+ */
 
-import React from 'react'
-import type { ItemCategory, MeasurementUnit, Barcode } from '@/types'
-import { Package, ShoppingCart, BarChart3, Scan, Plus } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Package, BarChart3, Scan, Plus } from 'lucide-react'
 
-// Import pantry components
+import type { ItemCategory } from '@/types'
 import PantryView from '@/components/pantry/PantryView'
 import CategoryList from '@/components/pantry/CategoryList'
 import CategoryItems from '@/components/pantry/CategoryItems'
-import { useScanner } from '@/components/barcode/ScannerProvider'
-import { getApiBaseUrl } from '@/services/apiClient'
 import AddItemModal from '@/components/pantry/AddItemModal'
-// Removed demo page from navigation
+import { useScanner } from '@/components/barcode/ScannerProvider'
+import { processScanResult } from '@/services/scanService'
+import { checkServerHealth } from '@/services/healthService'
+import { useAppInitialization } from '@/hooks/useAppInitialization'
 
-// Main App component - Simple One-Column Mobile Layout
+type ViewType = 'pantry' | 'categories' | 'categoryItems'
+
+interface AddItemData {
+  name?: string
+  category?: ItemCategory
+  quantity?: number
+  barcode?: string
+  brand?: string
+}
+
 const App: React.FC = () => {
-  const [showAddItemModal, setShowAddItemModal] = React.useState(false)
-  const [currentView, setCurrentView] = React.useState<'pantry' | 'categories' | 'categoryItems'>('pantry')
-  const [activeCategory, setActiveCategory] = React.useState<ItemCategory | null>(null)
-  const [dbOk, setDbOk] = React.useState<boolean | null>(null)
-  const [addItemInitialData, setAddItemInitialData] = React.useState<Partial<{
-    name: string
-    category: ItemCategory
-    quantity: number
-    unit: MeasurementUnit
-    barcode: Barcode | ''
-    notes: string
-  }> | undefined>(undefined)
+  // Clean state management
+  const [currentView, setCurrentView] = useState<ViewType>('pantry')
+  const [activeCategory, setActiveCategory] = useState<ItemCategory | null>(null)
+  const [showAddItemModal, setShowAddItemModal] = useState(false)
+  const [serverHealthy, setServerHealthy] = useState<boolean | null>(null)
+  const [addItemData, setAddItemData] = useState<AddItemData | undefined>()
 
-  const scannerCtx = (() => { try { return (useScanner as any)() } catch { return null } })()
-  const openScanner = React.useCallback(() => {
-    if (scannerCtx) {
-      scannerCtx.open(async (barcode: Barcode) => {
-        // Clean, server-first flow
-        try {
-          const baseUrl = getApiBaseUrl()
-          const { ProductRepository } = await import('@/services/ProductRepository')
-          
-          // Try server increment first (for existing items)
-          if (baseUrl && dbOk === true) {
-            try {
-              await ProductRepository.increment(barcode, 1)
-              console.log('✅ Incremented existing item')
-              return // Success - close scanner
-            } catch (err) {
-              console.log('ℹ️ Item not found on server, opening form with prefill')
-            }
-          } else if (baseUrl && dbOk === false) {
-            console.log('⚠️ Server unreachable, opening form with prefill')
-          }
+  // Initialize app and check server health
+  useAppInitialization()
 
-          // Not found - open form with OFF prefill
-          const { lookupProductByBarcode } = await import('@/services/productLookup')
-          const productData = await lookupProductByBarcode(barcode)
-          
-          if (productData) {
-            const initialData = {
-              barcode,
-              name: productData.name,
-              category: productData.category,
-              quantity: 1,
-              unit: 'pieces' as MeasurementUnit,
-              ...(productData.brand ? { brand: productData.brand } : {})
-            }
-            console.log('🔄 App: Setting initial data with product:', initialData)
-            setAddItemInitialData(initialData)
-          } else {
-            console.log('🔄 App: Setting initial data with barcode only:', { barcode })
-            setAddItemInitialData({ barcode })
-          }
-          
-          setShowAddItemModal(true)
-        } catch (e) {
-          console.error('Scanner pipeline failed:', e)
-          setAddItemInitialData({ barcode })
-          setShowAddItemModal(true)
-        }
-      })
-    }
-  }, [scannerCtx, dbOk])
+  // Scanner integration
+  const scannerCtx = useScanner()
 
-  // Dev-only: filter a benign ZXing / video element warning that can appear once during
-  // stream handoff ("Trying to play video that is already playing."). This prevents
-  // log noise without hiding other warnings. Guarded so we don't wrap multiple times
-  // on Vite HMR / React Fast Refresh.
-  React.useEffect(() => {
-    if (!(import.meta as any).env?.DEV) return
-    const c: any = console as any
-    if (c._hbWarnPatched) return
-    c._hbWarnPatched = true
-    const originalWarn = console.warn
-    console.warn = (...args: any[]) => {
-      try {
-        const first = args[0]
-        if (typeof first === 'string') {
-          if (/Trying to play video that is already playing/i.test(first)) return
-        }
-      } catch { /* ignore filter errors */ }
-      originalWarn(...args)
-    }
-  }, [])
-
-  // Initialize barcode cache on app startup
-  const initRunRef = React.useRef(false)
-  React.useEffect(() => {
-    if (initRunRef.current) return
-    initRunRef.current = true
-    const initializeApp = async () => {
-      try {
-        // Import services dynamically to avoid circular dependencies
-        const { ProductRepository } = await import('@/services/ProductRepository')
-        const { usePantryStore } = await import('@/stores/pantry.store')
-
-        console.log('🚀 App initializing...')
-
-        // Check API connectivity first with enhanced monitoring
-        const baseUrl = getApiBaseUrl()
-        if (!baseUrl) {
-          console.error('❌ VITE_API_BASE_URL not configured - running in local-only mode')
-          setDbOk(false)
-        } else {
-          const checkHealthWithRetry = async (maxAttempts = 3): Promise<boolean> => {
-            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-              try {
-                const healthCheck = await fetch(`${baseUrl}/health`, { 
-                  cache: 'no-store',
-                  signal: AbortSignal.timeout(5000) // 5s timeout
-                })
-                if (healthCheck.ok) {
-                  const j = await healthCheck.json()
-                  
-                  // Production-quality health check
-                  if (j?.dbOk !== undefined) {
-                    // Server provides dbOk field (preferred)
-                    const isHealthy = !!j.dbOk
-                    if (isHealthy) {
-                      console.log('✅ API server + DB connected:', baseUrl)
-                    } else {
-                      console.error('❌ API server reachable but DB not connected')
-                    }
-                    return isHealthy
-                  } else if (j?.ok) {
-                    // Server doesn't provide dbOk - test database connectivity ourselves
-                    console.log('ℹ️ Server missing dbOk field, testing database connectivity...')
-                    try {
-                      const dbTest = await fetch(`${baseUrl}/api/products?limit=1`, {
-                        cache: 'no-store',
-                        signal: AbortSignal.timeout(3000)
-                      })
-                      if (dbTest.ok) {
-                        console.log('✅ API server + DB connected (verified via products endpoint):', baseUrl)
-                        return true
-                      } else {
-                        console.error('❌ Database test failed:', dbTest.status)
-                        return false
-                      }
-                    } catch (dbError) {
-                      console.error('❌ Database connectivity test failed:', (dbError as Error).message)
-                      return false
-                    }
-                  } else {
-                    console.error('❌ Invalid health response:', j)
-                    return false
-                  }
-                } else {
-                  throw new Error(`HTTP ${healthCheck.status}`)
-                }
-              } catch (healthError) {
-                if (attempt < maxAttempts) {
-                  const delay = 1000 * attempt // 1s, 2s, 3s
-                  console.warn(`Health check attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms:`, (healthError as Error).message)
-                  await new Promise(resolve => setTimeout(resolve, delay))
-                } else {
-                  console.error('❌ API server unreachable after retries:', healthError)
-                  return false
-                }
-              }
-            }
-            return false
-          }
-          
-          const isHealthy = await checkHealthWithRetry()
-          setDbOk(isHealthy)
-        }
-
-        // Hydrate pantry from Neon first, fallback to local mirror
-        await ProductRepository.init()
-        if (getApiBaseUrl()) {
-          try {
-            const serverItems = await ProductRepository.fetchFromServer()
-            usePantryStore.getState().actions.replaceAll(serverItems)
-            console.log(`🔄 Loaded ${serverItems.length} items from server (authoritative)`)          
-          } catch (e: any) {
-            console.error('❌ Server fetch failed; falling back to local mirror:', e)
-            if (e?.message?.includes('API base URL not configured')) {
-              console.error('   → Check VITE_API_BASE_URL environment variable')
-            } else if (e?.message?.includes('failed: 4')) {
-              console.error('   → Check CORS configuration on server')
-            }
-            const localItems = await ProductRepository.hydrateFromLocal()
-            usePantryStore.getState().actions.replaceAll(localItems)
-            console.log(`📦 Loaded ${localItems.length} items from local storage (fallback)`)          
-          }
-        } else {
-          const localItems = await ProductRepository.hydrateFromLocal()
-          usePantryStore.getState().actions.replaceAll(localItems)
-          console.log(`📦 Loaded ${localItems.length} items from local storage (no server configured)`)        
-        }
-
-      } catch (error) {
-        console.error('❌ Failed to initialize app:', error)
-        // Continue app initialization even if hydration fails
+  // Clean scan handler following requirements pipeline
+  const handleScanResult = useCallback(async (barcode: string) => {
+    try {
+      const result = await processScanResult(barcode)
+      
+      if (result.type === 'increment') {
+        // Item incremented successfully, scanner will close automatically
+        return
       }
-    }
-
-    initializeApp()
-  }, [])
-
-  // Periodic health monitoring (every 30 seconds)
-  React.useEffect(() => {
-    if (!getApiBaseUrl()) return
-    
-    const monitorHealth = async () => {
-      try {
-        const baseUrl = getApiBaseUrl()
-        if (!baseUrl) return
-        
-        const healthCheck = await fetch(`${baseUrl}/health`, { 
-          cache: 'no-store',
-          signal: AbortSignal.timeout(3000) // 3s timeout for background checks
+      
+      // Show add form with data
+      if (result.data) {
+        setAddItemData({
+          name: result.data.name,
+          category: result.data.category,
+          quantity: result.data.quantity || 1,
+          barcode: result.data.barcode,
+          brand: result.data.brand
         })
-        
-        if (healthCheck.ok) {
-          const j = await healthCheck.json()
-          
-          // Production-quality background health check
-          if (j?.dbOk !== undefined) {
-            // Server provides dbOk field
-            const isHealthy = !!j.dbOk
-            setDbOk(isHealthy)
-            if (!isHealthy) {
-              console.warn('⚠️ Background health check: DB not connected')
-            }
-          } else if (j?.ok) {
-            // Server doesn't provide dbOk - quick database test
-            try {
-              const dbTest = await fetch(`${baseUrl}/api/products?limit=1`, {
-                cache: 'no-store', 
-                signal: AbortSignal.timeout(2000) // Shorter timeout for background
-              })
-              const isHealthy = dbTest.ok
-              setDbOk(isHealthy)
-              if (!isHealthy) {
-                console.warn('⚠️ Background health check: DB test failed')
-              }
-            } catch {
-              setDbOk(false)
-              console.warn('⚠️ Background health check: DB test error')
-            }
-          } else {
-            setDbOk(false)
-            console.warn('⚠️ Background health check: Invalid response')
-          }
-        } else {
-          setDbOk(false)
-          console.warn('⚠️ Background health check failed:', healthCheck.status)
-        }
-      } catch (error) {
-        setDbOk(false)
-        console.warn('⚠️ Background health check error:', (error as Error).message)
       }
+      setShowAddItemModal(true)
+    } catch (error) {
+      console.error('Scan processing failed:', error)
+      setAddItemData({ barcode })
+      setShowAddItemModal(true)
     }
-    
-    const interval = setInterval(monitorHealth, 30000) // Check every 30s
-    return () => clearInterval(interval)
   }, [])
 
-  // Camera diagnostic function removed (unused)
+  // Open scanner
+  const openScanner = useCallback(() => {
+    if (scannerCtx) {
+      scannerCtx.open(handleScanResult)
+    }
+  }, [scannerCtx, handleScanResult])
 
-  // Modal trigger functions (inline in navigation)
+  // Check server health on mount
+  useEffect(() => {
+    checkServerHealth().then(health => {
+      setServerHealthy(health.isHealthy)
+    })
+  }, [])
+
+  // Navigation handlers
+  const showCategoryView = useCallback((category: ItemCategory) => {
+    setActiveCategory(category)
+    setCurrentView('categoryItems')
+  }, [])
+
+  const showAddItemForm = useCallback(() => {
+    setAddItemData(undefined)
+    setShowAddItemModal(true)
+  }, [])
+
+  // Render current view
+  const renderCurrentView = () => {
+    switch (currentView) {
+      case 'categories':
+        return <CategoryList />
+      case 'categoryItems':
+        return activeCategory ? (
+          <CategoryItems
+            category={activeCategory}
+            onBack={() => setCurrentView('categories')}
+          />
+        ) : null
+      default:
+        return <PantryView />
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-100 to-neutral-200">
-      {/* Simple Header */}
+      {/* Server status banner */}
+      {serverHealthy === false && (
+        <div className="bg-red-50 border-b border-red-200 px-4 py-3">
+          <div className="text-red-800 text-sm text-center">
+            ⚠️ Server unreachable - data may not sync across devices
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-neutral-200/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center">
@@ -292,6 +130,74 @@ const App: React.FC = () => {
             </h1>
             <p className="text-neutral-600 mt-1 text-sm">Smart Pantry Management</p>
           </div>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {renderCurrentView()}
+      </main>
+
+      {/* Bottom navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-neutral-200 px-4 py-2">
+        <div className="flex justify-around items-center max-w-md mx-auto">
+          <button
+            onClick={() => setCurrentView('pantry')}
+            className={`flex flex-col items-center py-2 px-3 rounded-lg transition-colors ${
+              currentView === 'pantry' 
+                ? 'text-primary-600 bg-primary-50' 
+                : 'text-neutral-600 hover:text-neutral-900'
+            }`}
+          >
+            <Package size={20} />
+            <span className="text-xs mt-1">Pantry</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentView('categories')}
+            className={`flex flex-col items-center py-2 px-3 rounded-lg transition-colors ${
+              currentView === 'categories' 
+                ? 'text-primary-600 bg-primary-50' 
+                : 'text-neutral-600 hover:text-neutral-900'
+            }`}
+          >
+            <BarChart3 size={20} />
+            <span className="text-xs mt-1">Categories</span>
+          </button>
+
+          <button
+            onClick={openScanner}
+            className="flex flex-col items-center py-2 px-3 rounded-lg text-primary-600 bg-primary-100 hover:bg-primary-200 transition-colors"
+          >
+            <Scan size={24} />
+            <span className="text-xs mt-1">Scan</span>
+          </button>
+
+          <button
+            onClick={showAddItemForm}
+            className="flex flex-col items-center py-2 px-3 rounded-lg text-neutral-600 hover:text-neutral-900 transition-colors"
+          >
+            <Plus size={20} />
+            <span className="text-xs mt-1">Add</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Add item modal */}
+      {showAddItemModal && (
+        <AddItemModal
+          initialData={addItemData as any}
+          onClose={() => {
+            setShowAddItemModal(false)
+            setAddItemData(undefined)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+export default App
         </div>
       </header>
 

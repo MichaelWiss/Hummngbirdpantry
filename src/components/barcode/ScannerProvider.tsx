@@ -49,7 +49,16 @@ export const ScannerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       {visible && (
         <BarcodeScanner
           startOnMount={true}
-          onBarcodeDetected={(b) => { try { onDetectedRef.current?.(b) } finally { close() } }}
+          onBarcodeDetected={(b) => { 
+            try { 
+              console.log('[ScannerProvider] Barcode detected:', b)
+              onDetectedRef.current?.(b) 
+            } catch (e) {
+              console.error('[ScannerProvider] Callback error:', e)
+            }
+            // Don't close immediately - let the callback complete first
+            setTimeout(() => close(), 100)
+          }}
           onError={() => close()}
           onClose={() => close()}
         />

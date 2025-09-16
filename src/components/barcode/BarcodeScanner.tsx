@@ -273,8 +273,19 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
               return
             }
             // defer stopping to after callback to avoid hook order issues
-            try { onBarcodeDetected(normalized as Barcode) } catch (e) { console.error('onBarcodeDetected error:', e) }
-            setTimeout(() => { try { stopScanning() } catch {/* ignore */} }, 0)
+            console.log('[BarcodeScanner] Calling onBarcodeDetected with:', normalized)
+            try { 
+              onBarcodeDetected(normalized as Barcode) 
+            } catch (e) { 
+              console.error('onBarcodeDetected error:', e) 
+            }
+            // Give callback time to complete before stopping
+            setTimeout(() => { 
+              try { 
+                console.log('[BarcodeScanner] Stopping scanner after callback')
+                stopScanning() 
+              } catch {/* ignore */} 
+            }, 50)
           }
         } else if (err && !(err instanceof NotFoundException)) {
           if ((err as any)?.name === 'IndexSizeError') return
@@ -335,8 +346,10 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
     // Production-quality initialization flow
     const initializeScanner = async () => {
       try {
+        console.log('[BarcodeScanner] Checking camera permission...')
         // First check current permission state
         const permissionState = await checkCameraPermission()
+        console.log('[BarcodeScanner] Permission state:', permissionState)
         
         if (permissionState === 'denied') {
           setHasPermission(false)
@@ -354,20 +367,25 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeDetected, onEr
           
           if (permissionState === 'granted') {
             // Permission already granted, start scanning directly
-            startScanning()
+            console.log('[BarcodeScanner] Permission granted, starting scan directly...')
+            await startScanning()
           } else {
             // Need to request permission first
+            console.log('[BarcodeScanner] Requesting camera permission...')
             const stream = await requestCameraPermission()
             if (stream) {
               console.log('[BarcodeScanner] Camera permission granted, starting scan...')
-              startScanning()
+              await startScanning()
             } else {
               console.warn('[BarcodeScanner] Camera permission failed')
             }
           }
+        } else {
+          console.log('[BarcodeScanner] startOnMount=false, skipping initialization')
         }
       } catch (error) {
         console.error('[BarcodeScanner] Initialization failed:', error)
+        setIsInitializing(false)
         onError(`Scanner initialization failed: ${(error as Error).message}`)
       }
     }
