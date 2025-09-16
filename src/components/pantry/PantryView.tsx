@@ -12,8 +12,8 @@ import { usePantryActions } from '@/hooks/usePantryActions'
 // import AddItemModal from '@/components/pantry/AddItemModal'
 import type { PantryItem } from '@/types'
 
-// PantryItemCard Component - Memoized for performance
-const PantryItemCard = React.memo<{ item: PantryItem }>(({ item }) => {
+// PantryItemCard Component
+const PantryItemCard = ({ item }: { item: PantryItem }) => {
   const { update } = usePantryActions()
 
   const getStatusColor = (status?: string) => {
@@ -77,10 +77,7 @@ const PantryItemCard = React.memo<{ item: PantryItem }>(({ item }) => {
       </button>
     </div>
   )
-})
-
-// Add display name for debugging
-PantryItemCard.displayName = 'PantryItemCard'
+}
 
 // ============================================================================
 // MAIN PANTRY VIEW COMPONENT
