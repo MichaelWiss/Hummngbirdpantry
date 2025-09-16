@@ -39,10 +39,6 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
         initializingRef.current = true // Set flag to prevent multiple initializations
         
         try {
-          console.log('🎥 Starting camera initialization...')
-          console.log('📱 Navigator mediaDevices available:', !!navigator.mediaDevices)
-          console.log('🔒 Secure context:', window.isSecureContext)
-          
           // Try with progressive fallback for camera constraints
           let stream: MediaStream | null = null
           const constraints = [
@@ -68,12 +64,9 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
           
           for (let i = 0; i < constraints.length; i++) {
             try {
-              console.log(`📷 Trying camera constraint set ${i + 1}/${constraints.length}:`, constraints[i])
               stream = await navigator.mediaDevices.getUserMedia(constraints[i])
-              console.log('✅ Got media stream with constraint set', i + 1)
               break
             } catch (constraintError) {
-              console.log(`❌ Constraint set ${i + 1} failed:`, constraintError)
               if (i === constraints.length - 1) {
                 // All constraints failed, throw the last error
                 throw constraintError
@@ -86,12 +79,6 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
           }
           
           console.log('✅ Got media stream:', stream)
-          console.log('🎬 Stream tracks:', stream.getTracks().map(t => ({
-            kind: t.kind,
-            label: t.label,
-            enabled: t.enabled,
-            readyState: t.readyState
-          })))
           
           if (!mounted) {
             console.log('❌ Component unmounted, stopping stream')
@@ -118,11 +105,6 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
             setHasPermission(false)
             
             const errorMessage = error instanceof Error ? error.message : 'Camera access failed'
-            console.log('🔍 Error details:', {
-              name: error instanceof Error ? error.name : 'Unknown',
-              message: errorMessage,
-              stack: error instanceof Error ? error.stack : undefined
-            })
             
             if (errorMessage.includes('NotAllowedError') || (error as any)?.name === 'NotAllowedError') {
               onError('Camera permission denied. Please enable camera access.')
@@ -180,31 +162,26 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
       const reader = new BrowserMultiFormatReader()
       readerRef.current = reader
       
-      const scan = async () => {
-        try {
-          const result = await reader.decodeOnceFromVideoDevice(undefined, videoRef.current!)
-          
-          if (result) {
-            const barcode = result.getText().trim()
-            if (barcode) {
-              onBarcodeDetected(barcode)
-              return // Success - let parent handle closing
+      // Use continuous scanning with proper callback
+      reader.decodeFromVideoDevice(null, videoRef.current, (result, error) => {
+        if (result) {
+          const barcode = result.getText().trim()
+          if (barcode) {
+            // Stop scanning immediately when barcode found
+            setIsScanning(false)
+            if (readerRef.current) {
+              readerRef.current.reset()
+              readerRef.current = null
             }
+            onBarcodeDetected(barcode)
+            return
           }
-        } catch (error) {
-          // Ignore NotFoundException - normal during scanning
-          if (!(error instanceof NotFoundException)) {
-            console.warn('Scan error:', error)
-          }
+        } else if (error && !(error instanceof NotFoundException)) {
+          // Log non-routine errors
+          console.warn('Scan error:', error)
         }
-        
-        // Continue scanning if still active
-        if (readerRef.current && streamRef.current) {
-          requestAnimationFrame(scan)
-        }
-      }
-      
-      scan()
+        // NotFoundException is normal during scanning - ignore it
+      })
     }
   }, [hasPermission, isInitializing, isScanning, onBarcodeDetected])
 

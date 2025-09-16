@@ -28,12 +28,8 @@ export const ScannerProvider: React.FC<ScannerProviderProps> = ({ children }) =>
   const [error, setError] = useState<string | null>(null)
 
   const open = useCallback((resultCallback: (barcode: string) => void) => {
-    if (isOpen) {
-      console.warn('🚫 Scanner already open, ignoring duplicate open request')
-      return // Single-flight guard as per requirements.md
-    }
+    if (isOpen) return // Single-flight guard as per requirements.md
     
-    console.log('📷 Opening scanner modal...')
     setOnResult(() => resultCallback)
     setError(null)
     setIsOpen(true)
@@ -67,14 +63,11 @@ export const ScannerProvider: React.FC<ScannerProviderProps> = ({ children }) =>
     <ScannerContext.Provider value={contextValue}>
       {children}
       {isOpen && (
-        <>
-          {console.log('🎬 Rendering BarcodeScanner modal')}
-          <BarcodeScanner
-            onBarcodeDetected={handleBarcodeDetected}
-            onError={handleError}
-            onClose={close}
-          />
-        </>
+        <BarcodeScanner
+          onBarcodeDetected={handleBarcodeDetected}
+          onError={handleError}
+          onClose={close}
+        />
       )}
       {error && (
         <div className="fixed top-4 left-4 right-4 bg-red-50 border border-red-200 rounded-lg p-4 z-50">
