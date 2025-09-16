@@ -16,6 +16,11 @@ import { processScanResult } from '@/services/scanService'
 import { checkServerHealth } from '@/services/healthService'
 import { useAppInitialization } from '@/hooks/useAppInitialization'
 
+// Load debug utilities in development
+if (import.meta.env.DEV) {
+  import('@/utils/debugPantry')
+}
+
 type ViewType = 'pantry' | 'categories' | 'categoryItems'
 
 interface AddItemData {
