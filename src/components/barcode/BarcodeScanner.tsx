@@ -36,6 +36,8 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
     
     const init = async () => {
       if (mounted && !initializingRef.current) {
+        initializingRef.current = true // Set flag to prevent multiple initializations
+        
         try {
           // Direct camera initialization to avoid callback dependencies
           const stream = await navigator.mediaDevices.getUserMedia({
@@ -74,6 +76,11 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
             } else {
               onError('Camera initialization failed. Please try again.')
             }
+          }
+        } finally {
+          // Always reset the flag when initialization completes
+          if (mounted) {
+            initializingRef.current = false
           }
         }
       }
