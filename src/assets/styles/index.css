@@ -286,7 +286,8 @@ button:disabled {
 .button-danger {
   background-color: var(--color-expired);
   color: white;
-  padding: var(--spacing-2) var(--spacing-3);
+  padding: var(--spacing-1) var(--spacing-2);
+  font-size: 0.875rem;
 }
 
 .button-danger:hover:not(:disabled) {
