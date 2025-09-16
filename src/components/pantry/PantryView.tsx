@@ -4,6 +4,7 @@
 import React from 'react'
 // Icons are not used in this component, they were moved to the bottom navigation
 import { usePantryData, usePantryStats } from '@/hooks/usePantryData'
+import { usePantryActions } from '@/hooks/usePantryActions'
 // Barcode scanner handled by parent App component
 // import { useBarcodeScanner } from '@/hooks/useBarcodeScanner'
 // Modals are handled by parent App component
@@ -13,6 +14,8 @@ import type { PantryItem } from '@/types'
 
 // PantryItemCard Component - Memoized for performance
 const PantryItemCard = React.memo<{ item: PantryItem }>(({ item }) => {
+  const { update } = usePantryActions()
+
   const getStatusColor = (status?: string) => {
     switch (status) {
       case 'fresh': return 'bg-green-100 text-green-800'
@@ -27,6 +30,12 @@ const PantryItemCard = React.memo<{ item: PantryItem }>(({ item }) => {
       month: 'short',
       day: 'numeric'
     }).format(date)
+  }
+
+  const handleSubtract = () => {
+    if (item.quantity > 0) {
+      update(item.id, { quantity: item.quantity - 1 })
+    }
   }
 
   return (
@@ -56,6 +65,13 @@ const PantryItemCard = React.memo<{ item: PantryItem }>(({ item }) => {
           </div>
         )}
       </div>
+
+      <button
+        onClick={handleSubtract}
+        className="mt-4 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition"
+      >
+        Subtract
+      </button>
     </div>
   )
 })
