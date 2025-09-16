@@ -22,52 +22,12 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
-  const [isInitializing, setIsInitializing] = useState(false)
+  const [isInitializing, setIsInitializing] = useState(true) // Start as true
   
   // Scanner refs
   const readerRef = useRef<BrowserMultiFormatReader | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
-
-  // Clean camera initialization
-  const initializeCamera = useCallback(async () => {
-    if (isInitializing) return
-    
-    setIsInitializing(true)
-    
-    try {
-      // Simple camera constraints - no complex fallbacks
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280, min: 640 },
-          height: { ideal: 720, min: 480 }
-        }
-      })
-      
-      streamRef.current = stream
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
-      
-      setHasPermission(true)
-      setIsInitializing(false)
-    } catch (error) {
-      setIsInitializing(false)
-      setHasPermission(false)
-      
-      const errorMessage = error instanceof Error ? error.message : 'Camera access failed'
-      
-      if (errorMessage.includes('NotAllowedError')) {
-        onError('Camera permission denied. Please enable camera access.')
-      } else if (errorMessage.includes('NotFoundError')) {
-        onError('No camera found. Please connect a camera.')
-      } else {
-        onError('Camera initialization failed. Please try again.')
-      }
-    }
-  }, [isInitializing, onError])
+  const initializingRef = useRef(false) // Prevent multiple initializations
 
   // Clean scanning logic
   const startScanning = useCallback(() => {
@@ -105,9 +65,92 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
     scan()
   }, [isScanning, onBarcodeDetected])
 
-  // Cleanup function
-  const cleanup = useCallback(() => {
+  // Handle close with inline cleanup
+  useEffect(() => {
+    let mounted = true
+    const currentVideo = videoRef.current // Capture ref for cleanup
+    
+    const init = async () => {
+      if (mounted && !initializingRef.current) {
+        try {
+          // Direct camera initialization to avoid callback dependencies
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 }
+            }
+          })
+          
+          if (!mounted) {
+            stream.getTracks().forEach(track => track.stop())
+            return
+          }
+          
+          streamRef.current = stream
+          
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream
+            await videoRef.current.play()
+          }
+          
+          setHasPermission(true)
+          setIsInitializing(false)
+        } catch (error) {
+          if (mounted) {
+            setIsInitializing(false)
+            setHasPermission(false)
+            
+            const errorMessage = error instanceof Error ? error.message : 'Camera access failed'
+            
+            if (errorMessage.includes('NotAllowedError')) {
+              onError('Camera permission denied. Please enable camera access.')
+            } else if (errorMessage.includes('NotFoundError')) {
+              onError('No camera found. Please connect a camera.')
+            } else {
+              onError('Camera initialization failed. Please try again.')
+            }
+          }
+        }
+      }
+    }
+    
+    init()
+    
+    return () => {
+      mounted = false
+      // Cleanup
+      if (readerRef.current) {
+        readerRef.current.reset()
+        readerRef.current = null
+      }
+      
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+      }
+      
+      if (currentVideo) {
+        currentVideo.srcObject = null
+      }
+      
+      setIsScanning(false)
+      initializingRef.current = false
+    }
+  }, [onError]) // Only onError dependency needed
+
+  // Start scanning when camera is ready
+  useEffect(() => {
+    if (hasPermission && !isInitializing && !isScanning) {
+      startScanning()
+    }
+  }, [hasPermission, isInitializing, isScanning, startScanning])
+
+  // Handle close with inline cleanup
+  const handleClose = useCallback(() => {
+    // Inline cleanup logic
     setIsScanning(false)
+    initializingRef.current = false
     
     if (readerRef.current) {
       readerRef.current.reset()
@@ -122,26 +165,17 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
     if (videoRef.current) {
       videoRef.current.srcObject = null
     }
-  }, [])
-
-  // Initialize on mount
-  useEffect(() => {
-    initializeCamera()
-    return cleanup
-  }, [initializeCamera, cleanup])
-
-  // Start scanning when camera is ready
-  useEffect(() => {
-    if (hasPermission && !isInitializing && !isScanning) {
-      startScanning()
-    }
-  }, [hasPermission, isInitializing, isScanning, startScanning])
-
-  // Handle close
-  const handleClose = useCallback(() => {
-    cleanup()
+    
     onClose()
-  }, [cleanup, onClose])
+  }, [onClose])
+
+  // Handle permission request
+  const handlePermissionRequest = useCallback(() => {
+    // Reset states and trigger re-initialization
+    setHasPermission(null)
+    setIsInitializing(true)
+    initializingRef.current = false
+  }, [])
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
@@ -173,7 +207,7 @@ const BarcodeScanner = React.memo<BarcodeScannerProps>(({
               <Camera size={48} className="mx-auto mb-4" />
               <p className="mb-4">Camera access is required to scan barcodes</p>
               <button
-                onClick={initializeCamera}
+                onClick={handlePermissionRequest}
                 className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
               >
                 Grant Permission
