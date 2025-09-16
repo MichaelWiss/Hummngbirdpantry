@@ -7,5 +7,6 @@ export * from './pantry'
 // Barcode/Camera components  
 export * from './barcode'
 
-// Common/shared components would go here
+// Common/shared components
+export * from './common'
 // export * from './common'
