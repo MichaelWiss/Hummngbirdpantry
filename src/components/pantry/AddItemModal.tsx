@@ -238,7 +238,7 @@ export const AddItemModal = React.memo<AddItemModalProps>(({
             
             {/* Autofill Status */}
             {getAutofillStatusDisplay() && (
-              <p className="text-xs text-gray-600">{getAutofillStatusDisplay()}</p>
+              <p className="text-xs text-gray-700">{getAutofillStatusDisplay()}</p>
             )}
           </div>
 

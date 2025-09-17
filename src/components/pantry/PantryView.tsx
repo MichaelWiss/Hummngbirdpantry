@@ -50,7 +50,7 @@ const PantryItemCard = ({ item }: { item: PantryItem }) => {
         </span>
       </div>
 
-      <div className="space-y-2 text-sm text-gray-600 mb-4">
+      <div className="space-y-2 text-sm text-gray-700 mb-4">
         <div className="flex justify-between items-center">
           <span className="w-16 flex-shrink-0">Quantity:</span>
           <span className="font-medium">{item.quantity} {item.unit}</span>
