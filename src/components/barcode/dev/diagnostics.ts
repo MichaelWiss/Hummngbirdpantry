@@ -2,7 +2,7 @@
 // These functions are dynamically imported in dev to avoid bloating production bundles.
 // They attach helpers to window for manual console-driven investigation.
 
-/* eslint-disable no-console */
+ 
 
 // Minimal local shim for PermissionName to avoid TS lib dependency issues
 type PermissionNameShim = 'camera' | 'microphone' | 'geolocation' | 'notifications'

@@ -2,6 +2,27 @@
 
 ## Sprint: Make Main Feature Robust (Neon-first, Robust MVP)
 
+## 🏗️ ARCHITECTURAL PRINCIPLES (From requirements.md)
+
+### Core Requirements (Non-negotiables)
+- **🔵 Neon-First**: All CRUD writes go to Neon (Postgres) first. Neon is the single source of truth.
+- **🔵 Server-First**: If Neon unreachable, surface error immediately. No silent local-only fallbacks.
+- **🔵 Single-Flight Scanner**: Scanner opens once, stays open during decode churn. App-level guard prevents duplicates.
+- **🔵 Server-First Product Resolution**: On scan miss → Local cache → Server GET → OFF lookup → Manual form.
+
+### Implementation Guidelines
+- **✅ DO**: Surface Neon connection failures immediately with visible banners
+- **❌ DON'T**: Implement silent fallbacks that mask actual problems
+- **✅ DO**: Use same code path for all browsers with simple feature detection
+- **❌ DON'T**: Implement browser-specific workarounds without understanding root cause
+- **✅ DO**: Server state drives UI; local state is ephemeral read-through cache
+- **❌ DON'T**: Complex state synchronization between local and server stores
+
+### MVP Scope Boundaries
+- **IN SCOPE**: Scan → resolve product → Save → Confirmed in Neon → Reflected in UI
+- **OUT OF SCOPE**: Offline write queue, voice/photo recognition, shopping lists, advanced PWA features
+- **DEFERRED**: Advanced features until core Neon-first workflow is proven robust
+
 ### Blocking Bugs (to fix before any new features)
 - [ ] Scanner overlays duplicate in Chrome/Firefox
   - Root cause: multiple open triggers without a single-flight guard at App level.
@@ -82,7 +103,7 @@
 - ✅ Error boundaries and server health monitoring
 - ✅ Mobile-first responsive design system
 
-**Phase 2: Core Pantry Management (85% Complete)**
+**Phase 2: Core Pantry Management (95% Complete)**
 - ✅ PantryView component with full functionality
 - ✅ AddItemModal with form validation
 - ✅ Bottom navigation system
@@ -94,34 +115,44 @@
 - ✅ Optimistic updates pattern
 - 🔄 **IN PROGRESS**: Server-first barcode scanning workflow
 - 🔄 **IN PROGRESS**: Open Food Facts integration
-- ❌ **MISSING**: Voice input features
-- ❌ **MISSING**: Photo capture and OCR
+- ❌ **DEFERRED**: Voice input features (out of MVP scope)
+- ❌ **DEFERRED**: Photo capture and OCR (out of MVP scope)
 
-### 🔄 CURRENT SPRINT FOCUS
-**Sprint: Robust Neon-First MVP**
-- 🔄 Fix scanner overlay duplication across browsers
-- 🔄 Implement server-first product resolution pipeline
-- 🔄 Complete Neon-first CRUD operations
-- 🔄 Add proper error handling and user feedback
-- 🔄 Verify cross-browser consistency
+**Backend Implementation (100% Complete)**
+- ✅ Express.js server with TypeScript
+- ✅ PostgreSQL integration with Neon
+- ✅ Complete REST API (/api/products)
+- ✅ Database migrations and schema
+- ✅ CORS configuration
+- ✅ Health check endpoints
+- ✅ Zod validation for all endpoints
 
-### 📊 BACKEND STATUS
-**✅ FULLY IMPLEMENTED**
-- Express.js server with TypeScript
-- PostgreSQL integration with Neon
-- Complete REST API (/api/products)
-- Database migrations and schema
-- CORS configuration
-- Health check endpoints
-- Zod validation for all endpoints
-
-**API Endpoints Available:**
-- GET /api/products - List all products
-- GET /api/products/:barcode - Lookup by barcode
+**API Endpoints (All Implemented):**
+- ✅ GET /api/products - List all products
+- ✅ GET /api/products/:barcode - Lookup by barcode
+- ✅ POST /api/products - Create/update product
+- ✅ PATCH /api/products/:barcode/increment - Increment quantity
+- ✅ PUT /api/products/:id - Update product
+- ✅ DELETE /api/products/:id - Delete product
 - POST /api/products - Create/update product
 - PATCH /api/products/:barcode/increment - Increment quantity
 - PUT /api/products/:id - Update product
 - DELETE /api/products/:id - Delete product
+
+## Phase 0: Documentation & Planning (COMPLETED ✅)
+
+### Requirements & Roadmap
+- [x] Update requirements with iOS secure‑context rule (WebKit engine on all iOS browsers)
+- [x] Define supported barcode symbologies (UPC‑A, EAN‑13, EAN‑8; others as stretch)
+- [x] Define product fields and validation rules
+- [x] Finalize phased roadmap with granular acceptance criteria per phase
+
+### Security & Key Hygiene
+- [x] Local HTTPS guide: generating certs, trusting on device, pitfalls on Safari
+- [x] Secret scanning tooling and process (documented)
+- [x] Add "do not commit keys/certs" policies and `.gitignore` entries
+
+## Phase 1: Foundation & Core Setup
 
 ## Phase 0: Documentation & Planning
 
@@ -191,45 +222,51 @@
 - [ ] GA criteria met (see QA & Acceptance)
 
 
-## Phase 2.5: Voice & Photo Features
+## 🚫 DEFERRED FEATURES (Out of MVP Scope)
 
-### Voice (Web Speech API)
+### Phase 2.5: Voice & Photo Features (DEFERRED)
+**Status**: Explicitly out of scope for MVP per requirements.md
+**Rationale**: Core focus is robust Neon-first barcode scanning and pantry management
+
+#### Voice Recognition (Web Speech API) - DEFERRED
 - [ ] Voice input control with start/stop and visual feedback
 - [ ] Dictation pipeline to add items; error messages per error type
 - [ ] Mocks for testing voice flows in CI
 
-### Photo Capture & OCR (MVP)
+#### Photo Capture & OCR (MVP) - DEFERRED
 - [ ] Photo capture view (separate from scanner); resource cleanup
 - [ ] OCR pipeline (client‑side where possible); extract name/brand/qty
 - [ ] Manual correction form; save to DB
 
+### Phase 3: Shopping & Chat Systems (DEFERRED)
+**Status**: Explicitly out of scope for MVP per requirements.md
+**Rationale**: "Everything else is optional" - focus on core scan/add/update/delete workflow
 
-## Phase 3: Shopping & Chat Systems
-
-### Shopping Lists
+#### Shopping Lists - DEFERRED
 - [ ] Generate list from low stock/expiring soon
 - [ ] Aisles/sections ordering; drag‑and‑drop reordering
 - [ ] Mark purchased; archive history
 
-### Chat Assistant (MVP)
+#### Chat Assistant (MVP) - DEFERRED
 - [ ] Chat UI (messages, input, quick actions)
 - [ ] Commands: add item, create list, find recipes (mocked at first)
 - [ ] Error/resilience UX
 
+### Phase 4: Advanced PWA Features (PARTIALLY DEFERRED)
+**Status**: Basic PWA features may be included; advanced offline queue deferred
+**Rationale**: Service worker beyond basic app shell caching is out of scope
 
-## Phase 4: UI/UX & PWA
-
-### Mobile‑First UX
+#### Mobile‑First UX (IN SCOPE)
 - [ ] One‑column layouts on mobile; large touch targets
 - [ ] Typography, spacing, contrast tuned for iPhone
 - [ ] Animation/transition micro‑interactions (lightweight)
 
-### PWA & Offline
+#### Advanced PWA & Offline (DEFERRED)
 - [ ] Manifest with icons, theme, orientation; install prompt UX
 - [ ] Service worker: cache strategy for app shell; versioning
 - [ ] Offline banner + re‑sync flow for queued actions
 
-### iOS Secure‑Context Enablement
+#### iOS Secure‑Context Enablement (IN SCOPE)
 - [ ] Device‑trusted HTTPS guide and checklist (dev only)
 - [ ] App copy explaining iOS WebKit limitations on HTTP/LAN IP
 - [ ] Verification checklist (camera + IndexedDB work on device)
@@ -323,49 +360,35 @@
 - Single‑shot barcode mode, device switcher, diagnostics flag, extended fallback constraints.
 # HummingbirdPantry - Development Tasks
 
-## Current Sprint: Barcode → Save (Granular Milestones)
+## 🎯 CURRENT SPRINT: Robust Neon-First MVP (Aligned with requirements.md)
 
-### Scanner Reliability & iOS Secure Context
-- [ ] iOS secure context: device-trusted HTTPS for on-device testing
-- [ ] In-app capability gating banner (explain HTTP/LAN IP limits on iOS WebKit)
-- [ ] Diagnostic button: show secure-context, UA, mediaDevices status, IndexedDB status
-- [ ] Constraint negotiation fallback (min 640×480 @ 15fps) when OverconstrainedError
-- [ ] Stop all tracks on unmount / close to release camera reliably
-- [ ] Single-shot mode toggle (auto-stop on first decode)
+**Goal**: Make the main feature (scan/add/update pantry items) work robustly in all modern browsers with Neon (Postgres) as the single source of truth.
 
-### Data Model & Storage (Local-first)
-- [ ] Define `Product` type (id, barcode, name, brand, category, quantity, unit, meta)
-- [ ] Create `products` object store in IndexedDB (by `id`, index by `barcode`)
-- [ ] Create `offlineQueue` store for pending server sync (optional)
-- [ ] Service: `product.service.ts` with CRUD + barcode lookup helpers
+### Core Requirements (Non-negotiables from requirements.md)
+- ✅ All CRUD writes go to Neon first (single source of truth)
+- ✅ If Neon unreachable, surface error immediately (no silent fallbacks)
+- ✅ Scanner opens once, stays open during decode churn (single-flight guard)
+- ✅ Server-first product resolution: Local → Server → OFF → Manual
 
-### Barcode Scan Flow (MVP)
-- [ ] Open scanner modal, request camera, bind `video.srcObject`
-- [ ] Start ZXing `decodeFromVideoElementContinuously`
-- [ ] Debounce duplicate results; persist first stable decode only
-- [ ] Validate barcode (digits-only, length guardrails, checksum for EAN/UPC)
-- [ ] Local cache check (IndexedDB) by barcode
-- [ ] If cached, hydrate UI and offer quick-save
-- [ ] If miss, call lookup service(s); map result → `Product`
-- [ ] Fallback to manual form if no product found
+### Sprint Objectives
+- [ ] Fix scanner overlay duplication across browsers (single-flight guard)
+- [ ] Implement server-first product resolution pipeline
+- [ ] Complete Neon-first CRUD operations with proper error handling
+- [ ] Add visible error banners for Neon connection failures
+- [ ] Verify cross-browser consistency (Chrome/Firefox/Safari)
 
-### Save & Sync
-- [ ] Save product to IndexedDB; update pantry store optimistically
-- [ ] If server available, POST to `/api/products`; upsert local on success
-- [ ] If offline/failure, enqueue to `offlineQueue` for background sync
+### Technical Implementation Focus
+- [ ] Centralize `openScanner()` in `App.tsx` with single-flight guard
+- [ ] Implement Local → Server → OFF → Manual product resolution
+- [ ] Ensure all writes hit Neon or surface visible errors
+- [ ] Add startup data fetch from server with error banner on failure
+- [ ] Verify `VITE_API_BASE_URL` and CORS configuration
 
-### UX & Accessibility
-- [ ] Clear permission/insecure-context messaging with next steps
-- [ ] Visual focus frame and scan hint; large close/done buttons
-- [ ] Toasts: decoded, saved, lookup failed, queued for sync
-- [ ] Screen-reader announcements for success/failure
-
-### QA & Acceptance
-- [ ] Works on iOS device under secure context (camera + IndexedDB)
-- [ ] Decodes common UPC/EAN codes within 2 seconds in good light
-- [ ] No camera resource leak after closing scanner
-- [ ] Product persisted locally and visible in pantry list
-- [ ] Graceful fallback to manual entry when lookup fails
+### QA & Verification
+- [ ] Chrome/Firefox/Safari: single overlay, no duplicates
+- [ ] Add/update/increment/delete reflected in Neon immediately
+- [ ] Reload in another browser shows same state
+- [ ] Server outage shows visible banner, blocks writes
 
 
 ## Phase 0: Architecture Cleanup & Consolidation (COMPLETED ✅)
@@ -417,19 +440,19 @@
 
 ### [x] **✅ COMPLETED: Barcode Scanning Integration**
 
-### [ ] Voice Recognition System
+### [ ] Voice Recognition System (DEFERRED - Out of MVP Scope)
 
-### [ ] Photo Recognition Features
+### [ ] Photo Recognition Features (DEFERRED - Out of MVP Scope)
 
-### [ ] Smart Inventory Intelligence
+### [ ] Smart Inventory Intelligence (DEFERRED - Out of MVP Scope)
 
-## Phase 3: Advanced Shopping & Chat Systems (4-5 weeks)
+## Phase 3: Advanced Shopping & Chat Systems (4-5 weeks) - DEFERRED
 
-### [ ] Advanced Shopping List Management
+### [ ] Advanced Shopping List Management (DEFERRED - Out of MVP Scope)
 
-### [ ] AI Chat Assistant Implementation
+### [ ] AI Chat Assistant Implementation (DEFERRED - Out of MVP Scope)
 
-### [ ] Analytics Dashboard Development
+### [ ] Analytics Dashboard Development (DEFERRED - Out of MVP Scope)
 
 ## Phase 4: UI/UX & Advanced Features (3-4 weeks)
 
@@ -441,7 +464,7 @@
   - Darker background for better contrast and readability
   - Improved mobile spacing and touch targets
 
-### [ ] Voice & Camera Component Integration
+### [ ] Voice & Camera Component Integration (DEFERRED - Out of MVP Scope)
 
 ### [ ] iOS Secure-Context Enablement
 - Device-trusted HTTPS for on-device testing (iOS requires secure context or localhost)
@@ -467,8 +490,6 @@
 - [ ] Optimistic updates through unified pantry actions
 - [ ] Conflict resolution with server-first error handling
 - [ ] Background sync integration with simplified store
-
-## Phase 6: Testing & Quality Assurance (2-3 weeks)
 
 ## Phase 6: Testing & Quality Assurance (2-3 weeks)
 
@@ -613,31 +634,9 @@
 - Optional diagnostics flag for future debugging.
 - Fallback constraint negotiation for older Safari / Firefox edge cases if reported.
 
-
-## Task Dependencies & Prerequisites
-
-### [ ] Critical Path Dependencies
-
-### [ ] Parallel Development Opportunities
-
-## Risk Assessment & Mitigation
-
-### [ ] High-Risk Areas
-
-### [ ] Risk Mitigation Strategies
-
-## Success Metrics & Milestones
-
-### [ ] Development Milestones
-
-### [ ] Quality Gates
-
-### [ ] User Experience Metrics
-
 ## Development Workflow & Best Practices
 - [ ] Maintain clean git history with squashed merges
-
-- [ ] Documentation is updated
-
-- [ ] Performance regression testing
-## Phase 4: UI/UX & Advanced Features (3-4 weeks)
+- [ ] Documentation is updated with each feature implementation
+- [ ] Performance regression testing before deployments
+- [ ] Code reviews for all architectural changes
+- [ ] Automated testing for critical user paths
