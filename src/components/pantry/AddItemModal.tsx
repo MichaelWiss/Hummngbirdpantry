@@ -198,7 +198,7 @@ export const AddItemModal = React.memo<AddItemModalProps>(({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Add New Item</h2>
+          <h2 className="text-lg font-semibold text-neutral-900">Add New Item</h2>
           <button
             onClick={onClose}
             className="p-1 hover:bg-gray-100 rounded-full transition-colors"
@@ -212,7 +212,7 @@ export const AddItemModal = React.memo<AddItemModalProps>(({
           {/* Barcode Section */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-neutral-900">
                 Barcode (Optional)
               </label>
               {onOpenScanner && (
@@ -238,13 +238,13 @@ export const AddItemModal = React.memo<AddItemModalProps>(({
             
             {/* Autofill Status */}
             {getAutofillStatusDisplay() && (
-              <p className="text-xs text-gray-700">{getAutofillStatusDisplay()}</p>
+              <p className="text-xs text-neutral-900">{getAutofillStatusDisplay()}</p>
             )}
           </div>
 
           {/* Product Name */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-neutral-900">
               Product Name *
             </label>
             <input
@@ -261,7 +261,7 @@ export const AddItemModal = React.memo<AddItemModalProps>(({
 
           {/* Category */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-neutral-900">
               Category
             </label>
             <select
@@ -282,7 +282,7 @@ export const AddItemModal = React.memo<AddItemModalProps>(({
           {/* Quantity and Unit */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-neutral-900">
                 Quantity
               </label>
               <input
@@ -298,7 +298,7 @@ export const AddItemModal = React.memo<AddItemModalProps>(({
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-neutral-900">
                 Unit
               </label>
               <select
@@ -316,7 +316,7 @@ export const AddItemModal = React.memo<AddItemModalProps>(({
 
           {/* Notes */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-neutral-900">
               Notes (Optional)
             </label>
             <textarea
@@ -341,7 +341,7 @@ export const AddItemModal = React.memo<AddItemModalProps>(({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 border border-gray-300 text-neutral-900 rounded-md hover:bg-gray-50 transition-colors"
               disabled={isSubmitting}
             >
               Cancel

@@ -44,13 +44,13 @@ const PantryItemCard = ({ item }: { item: PantryItem }) => {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-3">
-        <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2 min-h-[2.5rem] flex-1 mr-2">{item.name}</h3>
+        <h3 className="font-semibold text-neutral-900 text-sm leading-tight line-clamp-2 min-h-[2.5rem] flex-1 mr-2">{item.name}</h3>
         <span className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(item.status)}`}>
           {item.status?.replace('-', ' ') || 'fresh'}
         </span>
       </div>
 
-      <div className="space-y-2 text-sm text-gray-700 mb-4">
+      <div className="space-y-2 text-sm text-neutral-900 mb-4">
         <div className="flex justify-between items-center">
           <span className="w-16 flex-shrink-0">Quantity:</span>
           <span className="font-medium">{item.quantity} {item.unit}</span>
